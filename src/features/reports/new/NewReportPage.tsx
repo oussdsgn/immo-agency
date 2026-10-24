@@ -15,8 +15,9 @@ import {
   type ReportDraft,
 } from '@/domain/reportValidation'
 import { useI18n } from '@/i18n'
+import { uuid } from '@/lib/id'
 import { useAsync } from '@/lib/useAsync'
-import { errorCode, services } from '@/services'
+import { errorCode, IS_MOCK_DATA, services } from '@/services'
 import type { Property, ReportCategory } from '@/types'
 import { useReportDraft } from '../useReportDraft'
 import { Stepper } from './Stepper'
@@ -52,6 +53,8 @@ function ReportWizard({ properties, categories }: { properties: Property[]; cate
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [confirmLeave, setConfirmLeave] = useState(false)
   const inFlight = useRef(false)
+  // Same id across retries so a flaky network never creates the report twice.
+  const clientId = useRef(uuid())
   const panelRef = useRef<HTMLDivElement>(null)
 
   // Skip the property step when there is nothing to choose.
@@ -143,6 +146,7 @@ function ReportWizard({ properties, categories }: { properties: Property[]; cate
     setSubmitError(null)
     try {
       const report = await services.reports.createReport({
+        clientId: clientId.current,
         propertyId: draft.propertyId!,
         categoryId: draft.categoryId!,
         title: draft.title,
@@ -206,7 +210,7 @@ function ReportWizard({ properties, categories }: { properties: Property[]; cate
               editTargets={steps.filter((s): s is Exclude<StepId, 'review'> => s !== 'review')}
               onEdit={(target) => goTo(steps.indexOf(target))}
             />
-            <InlineAlert tone="info">{t('newReport.prototypeNotice')}</InlineAlert>
+            {IS_MOCK_DATA && <InlineAlert tone="info">{t('newReport.prototypeNotice')}</InlineAlert>}
             {submitError && (
               <InlineAlert
                 tone="error"

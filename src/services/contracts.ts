@@ -25,10 +25,26 @@ import type {
   Session,
 } from '@/types'
 
+export interface SignUpInput {
+  fullName: string
+  email: string
+  password: string
+  phone?: string
+  /** Unit access code given by the agency. */
+  unitCode?: string
+  occupancy: 'owner' | 'tenant'
+}
+
 export interface AuthService {
+  /** `demo` = local prototype account; `account` = real sign-in. */
+  readonly mode: 'demo' | 'account'
   getSession(): Promise<Session | null>
   /** Prototype-only: starts the clearly labelled demo session. */
   signInDemo(): Promise<Session>
+  signIn(email: string, password: string): Promise<Session>
+  /** Returns null when the account must first be confirmed by e-mail. */
+  signUp(input: SignUpInput): Promise<Session | null>
+  sendPasswordReset(email: string): Promise<void>
   signOut(): Promise<void>
 }
 
@@ -41,6 +57,8 @@ export interface ResidentService {
 export interface PropertyService {
   listMyProperties(): Promise<Property[]>
   getProperty(id: string): Promise<Property>
+  /** Links the account to a unit with the access code given by the agency. */
+  claimUnit(code: string, occupancy: 'owner' | 'tenant'): Promise<void>
 }
 
 export interface ReportService {

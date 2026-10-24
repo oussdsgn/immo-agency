@@ -47,7 +47,7 @@ export function canResidentReply(report: Pick<Report, 'status'>): boolean {
  * never change statuses themselves.
  */
 export const AGENCY_TRANSITIONS: Record<ReportStatus, ReportStatus[]> = {
-  submitted: ['under_review', 'rejected'],
+  submitted: ['under_review', 'in_progress', 'rejected'],
   under_review: ['in_progress', 'awaiting_resident', 'rejected'],
   in_progress: ['resolved', 'awaiting_resident'],
   awaiting_resident: ['in_progress', 'closed'],

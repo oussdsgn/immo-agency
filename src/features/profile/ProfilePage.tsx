@@ -120,7 +120,7 @@ export function ProfilePage() {
                 <SectionHeading id="privacy" title={t('profile.privacy')} />
                 <Card className="flex gap-3 p-4">
                   <ShieldCheck className="mt-0.5 size-5 shrink-0 text-success-ink" aria-hidden />
-                  <p className="text-sm text-ink-soft">{t('profile.privacyBody')}</p>
+                  <p className="text-sm text-ink-soft">{IS_MOCK_DATA ? t('profile.privacyBody') : t('profile.privacyBodyLive')}</p>
                 </Card>
               </section>
 
@@ -135,7 +135,7 @@ export function ProfilePage() {
 
               <ConfirmDialog
                 open={confirmOut}
-                message={t('profile.signOutConfirm')}
+                message={IS_MOCK_DATA ? t('profile.signOutConfirm') : `${t('profile.signOut')} ?`}
                 confirmLabel={t('profile.signOut')}
                 onClose={() => setConfirmOut(false)}
                 onConfirm={async () => {

@@ -6,3 +6,6 @@ dist
 !.env.example
 test-results
 .DS_Store
+dist-dashboard
+supabase/.temp
+supabase/.branches

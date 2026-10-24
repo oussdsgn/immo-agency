@@ -119,6 +119,9 @@ export interface StatusEvent {
   note?: string
   source: EventSource
   simulated?: boolean
+  /** Set when the agency dispatched a technician. */
+  technicianName?: string
+  scheduledAt?: ISODate
 }
 
 export interface ReportMessage {
@@ -167,6 +170,8 @@ export interface ResolutionFeedback {
 export type ResolutionFeedbackInput = Omit<ResolutionFeedback, 'at'>
 
 export interface NewReportInput {
+  /** Client-generated id, reused on retry so a report is never created twice. */
+  clientId?: string
   propertyId: string
   categoryId: ReportCategoryId
   title: string
@@ -181,6 +186,8 @@ export type NotificationType =
   | 'report_status_changed'
   | 'info_requested'
   | 'report_resolved'
+  | 'agency_message'
+  | 'intervention_scheduled'
   | 'announcement'
 
 export interface AppNotification {
@@ -245,7 +252,7 @@ export interface NotificationPreferences {
 
 export interface Session {
   residentId: string
-  /** Marks the prototype demo session; never a real authenticated session. */
-  kind: 'demo'
+  /** `demo`: prototype session, no authentication. `account`: signed-in user. */
+  kind: 'demo' | 'account'
   startedAt: ISODate
 }

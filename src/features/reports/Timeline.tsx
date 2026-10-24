@@ -45,6 +45,12 @@ export function Timeline({ report }: { report: Report }) {
                 <time dateTime={e.at}>{f.dateTime(e.at)}</time>
               </p>
               {e.note && <p className="mt-1 text-sm text-ink-soft">{e.note.startsWith('timeline.') ? t(e.note as TKey) : e.note}</p>}
+              {(e.technicianName || e.scheduledAt) && (
+                <div className="mt-1.5 rounded-control bg-progress-soft/70 px-3 py-2 text-xs font-medium text-progress-ink">
+                  {e.technicianName && <p>{t('timeline.technician', { name: e.technicianName })}</p>}
+                  {e.scheduledAt && <p>{t('timeline.appointment', { date: f.dateTime(e.scheduledAt) })}</p>}
+                </div>
+              )}
             </div>
           </li>
         )

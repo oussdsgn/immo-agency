@@ -2,6 +2,7 @@ import { FlaskConical } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { PageHeader, SectionHeading } from '@/components/ui/PageHeader'
 import { useI18n } from '@/i18n'
+import { IS_MOCK_DATA } from '@/services'
 
 const ITEMS = ['auth', 'data', 'photos', 'agency', 'listings'] as const
 
@@ -12,6 +13,7 @@ export function AboutPage() {
       <PageHeader title={t('about.title')} back="/profil" />
       <div className="space-y-6">
         <Card className="p-4 text-sm text-ink-soft">{t('about.body')}</Card>
+        {IS_MOCK_DATA && (
         <section aria-labelledby="mock">
           <SectionHeading id="mock" title={t('about.mockTitle')} />
           <Card className="p-4">
@@ -25,6 +27,7 @@ export function AboutPage() {
             </ul>
           </Card>
         </section>
+        )}
         <p className="text-center text-xs text-muted">{t('profile.version', { version: __APP_VERSION__ })}</p>
       </div>
     </>

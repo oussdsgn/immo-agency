@@ -11,7 +11,7 @@ import { AsyncBoundary, EmptyState, Skeleton } from '@/components/ui/States'
 import { ReportCard } from '@/features/reports/ReportCard'
 import { useI18n } from '@/i18n'
 import { useAsync } from '@/lib/useAsync'
-import { services } from '@/services'
+import { IS_MOCK_DATA, services } from '@/services'
 import { unitLine } from './format'
 
 export function PropertyDetailPage() {
@@ -113,7 +113,7 @@ export function PropertyDetailPage() {
                         </a>
                       )}
                     </div>
-                    <p className="mt-3 text-xs text-muted">{t('common.fictionalData')}</p>
+                    {IS_MOCK_DATA && <p className="mt-3 text-xs text-muted">{t('common.fictionalData')}</p>}
                   </Card>
                 </section>
               )}

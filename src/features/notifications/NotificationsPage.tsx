@@ -1,4 +1,4 @@
-import { Bell, CheckCheck, CircleAlert, CircleCheck, ClipboardList, Megaphone, RefreshCw, type LucideIcon } from 'lucide-react'
+import { Bell, CalendarClock, CheckCheck, CircleAlert, CircleCheck, ClipboardList, Megaphone, MessageSquare, RefreshCw, type LucideIcon } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { DevBadge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -17,6 +17,8 @@ const ICON: Record<NotificationType, LucideIcon> = {
   report_status_changed: RefreshCw,
   info_requested: CircleAlert,
   report_resolved: CircleCheck,
+  agency_message: MessageSquare,
+  intervention_scheduled: CalendarClock,
   announcement: Megaphone,
 }
 
@@ -25,6 +27,8 @@ const TONE: Record<NotificationType, string> = {
   report_status_changed: 'bg-info-soft text-info-ink',
   info_requested: 'bg-attention-soft text-attention-ink',
   report_resolved: 'bg-success-soft text-success-ink',
+  agency_message: 'bg-sunken text-ink-soft',
+  intervention_scheduled: 'bg-progress-soft text-progress-ink',
   announcement: 'bg-brand-soft text-brand',
 }
 

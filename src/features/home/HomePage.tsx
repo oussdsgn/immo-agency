@@ -10,7 +10,8 @@ import { unitLine } from '@/features/properties/format'
 import { ReportCard } from '@/features/reports/ReportCard'
 import { useI18n } from '@/i18n'
 import { useAsync } from '@/lib/useAsync'
-import { services } from '@/services'
+import { IS_MOCK_DATA, services } from '@/services'
+import { ButtonLink } from '@/components/ui/Button'
 import type { Announcement, Property } from '@/types'
 
 async function loadHome() {
@@ -75,7 +76,18 @@ export function HomePage() {
               </Link>
             ) : (
               <Card>
-                <EmptyState icon={<Building2 />} title={t('home.noPropertiesTitle')} body={t('home.noPropertiesBody')} />
+                <EmptyState
+                  icon={<Building2 />}
+                  title={t('home.noPropertiesTitle')}
+                  body={t('home.noPropertiesBody')}
+                  action={
+                    !IS_MOCK_DATA && (
+                      <ButtonLink to="/biens" variant="secondary">
+                        {t('properties.claimTitle')}
+                      </ButtonLink>
+                    )
+                  }
+                />
               </Card>
             )}
 

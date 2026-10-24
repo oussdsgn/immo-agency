@@ -3,6 +3,8 @@
 declare const __APP_VERSION__: string
 
 interface ImportMetaEnv {
-  /** Reserved for a future HTTP data source ('mock' | 'api'). Never put secrets in VITE_* vars. */
-  readonly VITE_DATA_SOURCE?: string
+  /** Supabase project URL. When unset the app runs on local demo data. */
+  readonly VITE_SUPABASE_URL?: string
+  /** Supabase anon / publishable key (public by design; RLS protects data). Never the service-role key. */
+  readonly VITE_SUPABASE_ANON_KEY?: string
 }

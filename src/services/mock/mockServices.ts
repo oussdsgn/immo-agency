@@ -140,6 +140,11 @@ export function createMockServices({ store, latency = [250, 650], now = Date.now
 
   const services: Services = {
     auth: {
+      mode: 'demo',
+      // Real accounts only exist with the Supabase data source.
+      signIn: () => Promise.reject(new ServiceError('validation')),
+      signUp: () => Promise.reject(new ServiceError('validation')),
+      sendPasswordReset: () => Promise.reject(new ServiceError('validation')),
       // Reading the stored session is local: a network outage must not sign the resident out.
       getSession: () => call('read', readSession, { auth: false, local: true }),
       signInDemo: () =>
@@ -176,6 +181,11 @@ export function createMockServices({ store, latency = [250, 650], now = Date.now
     },
 
     properties: {
+      // Demo units are fixed; codes only exist with the Supabase data source.
+      claimUnit: () =>
+        call('write', () => {
+          throw new ServiceError('not_found')
+        }),
       listMyProperties: () =>
         call('read', () => db.properties.filter((p) => db.resident.propertyIds.includes(p.id))),
       getProperty: (id) =>
@@ -199,6 +209,8 @@ export function createMockServices({ store, latency = [250, 650], now = Date.now
       createReport: (input) =>
         call('write', () => {
           if (!db.resident.propertyIds.includes(input.propertyId)) throw new ServiceError('validation')
+          const existing = input.clientId && db.reports.find((r) => r.id === input.clientId)
+          if (existing) return existing
           const at = new Date(now()).toISOString()
           const year = new Date(now()).getFullYear()
           let reference: string
@@ -206,7 +218,7 @@ export function createMockServices({ store, latency = [250, 650], now = Date.now
             reference = `DEV-${year}-${String(db.nextReferenceNumber++).padStart(4, '0')}`
           } while (db.reports.some((r) => r.reference === reference))
           const report: Report = {
-            id: uid('rep'),
+            id: input.clientId ?? uid('rep'),
             reference,
             propertyId: input.propertyId,
             categoryId: input.categoryId,

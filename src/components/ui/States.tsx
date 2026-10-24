@@ -2,7 +2,7 @@ import { CircleAlert, LogIn, WifiOff } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useI18n } from '@/i18n'
 import { cn } from '@/lib/cn'
-import { errorCode } from '@/services'
+import { errorCode } from '@/services/errors'
 import { Button, ButtonLink } from './Button'
 
 export function EmptyState({
