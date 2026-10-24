@@ -3,7 +3,10 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { Link, useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/cn'
 import { emitChange } from '@/services/events'
-import { db } from '@dash/lib/supabase'
+import { collection, onSnapshot } from 'firebase/firestore'
+import type { ReportDoc } from '@/services/firebase/schema'
+import { toListItem } from '@dash/lib/data'
+import { db } from '@dash/lib/firebase'
 
 export type AlertKind = 'new_report' | 'resident_reply' | 'reopened' | 'feedback'
 
@@ -93,22 +96,18 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     navigateRef.current = navigate
   }, [navigate])
-  const recentReopen = useRef(new Map<string, number>())
-
-  const push = useCallback(async (kind: AlertKind, reportId: string, extra: Partial<AgencyAlert> = {}) => {
-    if (!db) return
-    const { data: r } = await db.from('reports').select('reference, title, urgency').eq('id', reportId).maybeSingle()
-    if (!r) return
+  const push = useCallback((kind: AlertKind, reportId: string, r: ReportDoc) => {
+    const item = toListItem(reportId, r)
     const alert: AgencyAlert = {
       id: crypto.randomUUID(),
       kind,
       reportId,
-      reference: r.reference,
+      reference: item.reference,
       title: r.title,
       urgency: r.urgency,
+      rating: kind === 'feedback' ? (r.feedback?.rating ?? null) : undefined,
       at: new Date().toISOString(),
       read: false,
-      ...extra,
     }
     setAlerts((a) => [alert, ...a].slice(0, 100))
     setToasts((t) => [alert, ...t].slice(0, 4))
@@ -121,38 +120,35 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
         navigateRef.current(`/signalements/${reportId}`)
       }
     }
-    emitChange('reports')
   }, [])
 
   useEffect(() => {
-    if (!db) return
-    const client = db
-    const channel = client
-      .channel('agency-feed')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'report_events', filter: 'source=eq.resident' }, (p) => {
-        const e = p.new as { report_id: string; status: string }
-        if (e.status === 'submitted') void push('new_report', e.report_id)
-        else {
-          recentReopen.current.set(e.report_id, Date.now())
-          void push('reopened', e.report_id)
+    // One live query on all reports: new documents are new reports, and
+    // `residentActivity` changes are replies, ratings and reopenings.
+    const seen = new Map<string, number>()
+    let initial = true
+    return onSnapshot(
+      collection(db, 'reports'),
+      { includeMetadataChanges: false },
+      (snap) => {
+        setLink(snap.metadata.fromCache ? 'connecting' : 'live')
+        for (const change of snap.docChanges()) {
+          const r = change.doc.data({ serverTimestamps: 'estimate' }) as ReportDoc
+          const activity = r.residentActivity ? (r.residentActivity.at as { toMillis?: () => number }).toMillis?.() ?? 0 : 0
+          const before = seen.get(change.doc.id)
+          seen.set(change.doc.id, activity)
+          if (initial || change.type === 'removed' || snap.metadata.hasPendingWrites) continue
+          if (change.type === 'added') push('new_report', change.doc.id, r)
+          else if (r.residentActivity && activity !== before) {
+            const kind = r.residentActivity.kind
+            push(kind === 'reply' ? 'resident_reply' : kind === 'reopen' ? 'reopened' : 'feedback', change.doc.id, r)
+          }
         }
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'report_messages', filter: 'author_kind=eq.resident' }, (p) => {
-        const m = p.new as { report_id: string }
-        // The explanation sent with a reopening is already covered by that alert.
-        setTimeout(() => {
-          if (Date.now() - (recentReopen.current.get(m.report_id) ?? 0) > 5000) void push('resident_reply', m.report_id)
-        }, 800)
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'reports' }, (p) => {
-        const r = p.new as { id: string; feedback_at: string | null; feedback_rating: number | null }
-        emitChange('reports')
-        if (r.feedback_at && Date.now() - new Date(r.feedback_at).getTime() < 60_000) void push('feedback', r.id, { rating: r.feedback_rating })
-      })
-      .subscribe((status) => setLink(status === 'SUBSCRIBED' ? 'live' : status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED' ? 'offline' : 'connecting'))
-    return () => {
-      void client.removeChannel(channel)
-    }
+        if (!initial && snap.docChanges().length) emitChange('reports')
+        initial = false
+      },
+      () => setLink('offline'),
+    )
   }, [push])
 
   const value: AlertsState = {

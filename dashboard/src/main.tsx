@@ -10,11 +10,9 @@ import { LoginPage } from './auth/LoginPage'
 import { PendingPage } from './auth/PendingPage'
 import { RequireStaff, StaffProvider } from './auth/staff'
 import { Shell } from './layout/Shell'
-import { db } from './lib/supabase'
 import { AnnouncementsPage } from './pages/AnnouncementsPage'
 import { DispatchPage } from './pages/DispatchPage'
 import { LeadsPage } from './pages/LeadsPage'
-import { NotConfigured } from './pages/NotConfigured'
 import { OverviewPage } from './pages/OverviewPage'
 import { ReportDetailPage } from './pages/ReportDetailPage'
 import { ReportsPage } from './pages/ReportsPage'
@@ -35,9 +33,6 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <I18nProvider>
       <ToastProvider>
-        {!db ? (
-          <NotConfigured />
-        ) : (
           <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
             <StaffProvider>
               <Routes>
@@ -67,7 +62,6 @@ createRoot(document.getElementById('root')!).render(
               </Routes>
             </StaffProvider>
           </BrowserRouter>
-        )}
       </ToastProvider>
     </I18nProvider>
   </StrictMode>,

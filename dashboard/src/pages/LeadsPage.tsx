@@ -7,16 +7,13 @@ import { useI18n } from '@/i18n'
 import { cn } from '@/lib/cn'
 import { useAsync } from '@/lib/useAsync'
 import { emitChange } from '@/services/events'
-import { errorMessage, q, requireDb } from '@dash/lib/supabase'
+import { listLeads, setLeadHandled } from '@dash/lib/admin'
+import { errorMessage } from '@dash/lib/firebase'
 
 export function LeadsPage() {
   const { f } = useI18n()
   const toast = useToast()
-  const state = useAsync(
-    () => q(requireDb().from('interest_requests').select('*, listing:listings(title_fr, city)').order('at', { ascending: false }).limit(200)),
-    [],
-    ['all'],
-  )
+  const state = useAsync(listLeads, [], ['all'])
   return (
     <>
       <PageHeader title="Demandes d’achat / location" subtitle="Résidents intéressés par un bien de la rubrique « Acquérir »" />
@@ -29,17 +26,17 @@ export function LeadsPage() {
           ) : (
             <Card className="divide-y divide-line overflow-hidden">
               {list.map((l) => {
-                const listing = l.listing as { title_fr: string; city: string } | null
+                const listing = l.listing
                 return (
                   <div key={l.id} className={cn('flex flex-wrap items-start gap-4 p-4', l.handled && 'opacity-60')}>
                     <div className="min-w-0 flex-1">
                       <p className="font-bold text-ink">{l.name}</p>
                       <p className="text-sm text-ink-soft">
-                        {listing?.title_fr} · {listing?.city}
+                        {listing?.titleFr ?? 'Annonce supprimée'} · {listing?.city}
                       </p>
                       {l.message && <p className="mt-1 text-sm text-ink-soft">“{l.message}”</p>}
                       <p className="mt-1 text-xs text-muted">
-                        {f.dateTime(l.at)} · préfère être contacté par {l.preferred_contact === 'phone' ? 'téléphone' : 'e-mail'}
+                        {f.dateTime(l.at)} · préfère être contacté par {l.preferredContact === 'phone' ? 'téléphone' : 'e-mail'}
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -60,7 +57,7 @@ export function LeadsPage() {
                           className="size-4 accent-[var(--color-brand)]"
                           onChange={async (e) => {
                             try {
-                              await q(requireDb().from('interest_requests').update({ handled: e.target.checked }).eq('id', l.id))
+                              await setLeadHandled(l.id, e.target.checked)
                               emitChange('all')
                             } catch (err) {
                               toast(errorMessage(err), 'error')

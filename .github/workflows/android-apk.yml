@@ -42,10 +42,10 @@ jobs:
           npm test
 
       - name: Build web app
-        # Without these repo variables the APK runs on local demo data.
+        # Connected to the agency's Firebase project by default; set the repo
+        # variable VITE_DATA_SOURCE=mock to build the demo-data version.
         env:
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          VITE_DATA_SOURCE: ${{ vars.VITE_DATA_SOURCE || 'firebase' }}
         run: npm run build
 
       - name: Sync web build into the Android project
@@ -79,7 +79,7 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
-          CONNECTED: ${{ vars.VITE_SUPABASE_URL != '' }}
+          CONNECTED: ${{ vars.VITE_DATA_SOURCE != 'mock' }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
           if [ "$CONNECTED" = "true" ]; then

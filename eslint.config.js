@@ -5,7 +5,7 @@ import globals from 'globals'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  { ignores: ['dist', 'dist-dashboard', 'node_modules', 'android', 'test-results', 'supabase/.temp'] },
+  { ignores: ['dist', 'dist-dashboard', 'node_modules', 'android', 'test-results'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],

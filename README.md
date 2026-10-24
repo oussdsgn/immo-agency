@@ -16,13 +16,13 @@ Depuis un ordinateur, scannez ce QR code avec le téléphone. Android vous deman
 | --- | --- | --- |
 | **Application résident** (`src/`) | Résidents : signaler, suivre, échanger, annonces, urgences | APK Android, ou web |
 | **Tableau de bord agence** (`dashboard/`) | Équipe de l'agence : alertes en direct, traitement, planification des techniciens, immeubles et codes logement, annonces | Navigateur : `https://<compte>.github.io/immo-agency/` |
-| **Backend Supabase** (`supabase/`) | Base de données, comptes, photos, temps réel, règles d'accès | Votre projet Supabase |
+| **Backend Firebase** (`firebase/`) | Comptes (Authentication), données, photos et temps réel (Firestore), règles d'accès | Projet Firebase `immo-agency-53c66` (offre gratuite Spark) |
 
-👉 **Mise en service :** suivez [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md), environ 15 minutes.
+👉 **Mise en service :** suivez [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md), environ 10 minutes.
 
-**Modes de l'application résident**
-- **Connectée** : quand `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` sont définis au build. Les comptes sont réels, les données partagées avec le tableau de bord et les mises à jour arrivent en direct.
-- **Démonstration** : sans ces variables. Les données sont fictives et stockées sur l'appareil, et un simulateur imite les réponses de l'agence. Rien n'est transmis.
+**Modes de l'application résident** (variable `VITE_DATA_SOURCE` au build)
+- **Connectée** (`firebase`, par défaut pour les builds et l'APK) : les comptes sont réels, les données partagées avec le tableau de bord et les mises à jour arrivent en direct.
+- **Démonstration** (`mock`, par défaut pour `npm run dev`) : les données sont fictives et stockées sur l'appareil, et un simulateur imite les réponses de l'agence. Rien n'est transmis.
 
 ## Démarrage
 
@@ -42,6 +42,8 @@ npm run dev        # http://localhost:5173
 | `npm run lint` | ESLint |
 | `npm test` | Tests unitaires (Vitest) : domaine, i18n, couche de services simulée |
 | `npm run android:apk` | Build web + APK Android debug (voir plus bas) |
+| `npm run test:rules` | Tests des règles de sécurité Firestore sur l'émulateur (47 vérifications ; Java 21 requis) |
+| `npm run emulators` | Émulateurs Firebase locaux (Auth + Firestore) |
 | `npm run e2e` | Parcours de bout en bout (28 étapes, FR + AR) sur un serveur lancé. Nécessite Chromium : `CHROMIUM_PATH=/chemin/vers/chrome npm run e2e` |
 
 À l'ouverture, choisissez **« Continuer avec le compte de démonstration »**.
@@ -120,7 +122,7 @@ src/
 
 Stack : React 19, TypeScript, Vite, Tailwind CSS v4, React Router, Lucide. La validation est écrite à la main (aucune bibliothèque de formulaires nécessaire).
 
-L'interface ne dépend que de `services` (`src/services/index.ts`), qui expose l'interface `Services` de `contracts.ts`. Seule l'implémentation simulée existe aujourd'hui (latence, persistance en localStorage, pannes optionnelles).
+L'interface ne dépend que de `services` (`src/services/index.ts`), qui expose l'interface `Services` de `contracts.ts`. Deux implémentations : `mock/` (latence, persistance en localStorage, pannes optionnelles) et `firebase/` (Firebase Auth + Firestore). Les écritures Firestore partagées par l'app, le tableau de bord et les tests sont dans `src/services/firebase/ops.ts`.
 
 ## Tableau de bord agence
 
@@ -138,28 +140,28 @@ L'interface ne dépend que de `services` (`src/services/index.ts`), qui expose l
 
 ## Backend et sécurité
 
-- **Règles d'accès dans la base** (Row Level Security) : un résident ne voit que ses logements, leurs signalements, sa résidence et ses annonces. Les codes d'accès ne sont lisibles que par l'agence.
-- **Workflow côté serveur** : statut, demande d'informations, planification et avis passent par des fonctions SQL (`set_report_status`, `request_info`, `dispatch_report`, `submit_feedback`).
-  - Elles vérifient le rôle et la transition demandée.
-  - Elles écrivent l'historique et les notifications dans la même transaction.
-  - Personne ne peut modifier un statut directement.
-- **Identité côté serveur** : la référence `SR-AAAA-NNNN`, l'auteur des messages et des photos, le statut initial et le rattachement au logement sont fixés par la base, jamais par le client.
-- **Photos** : bucket privé, avec un dossier par signalement. Elles ne sont lisibles qu'avec des liens signés temporaires, réservés aux personnes autorisées.
+- **Règles Firestore** (`firebase/firestore.rules`) : un résident ne voit que ses logements, leurs signalements, sa résidence et ses annonces. Un code logement ne se lit qu'un par un (pour vérifier un code), jamais en liste.
+- **Workflow imposé par les règles** :
+  - seules les transitions de statut autorisées passent ;
+  - chaque changement de statut ou planification doit écrire son entrée d'historique dans le même lot ;
+  - un résident ne peut que déposer, répondre, confirmer (note de 1 à 5, une seule fois) ou signaler que le problème persiste.
+- **Identité vérifiée** : l'auteur des messages, des photos et des événements doit être l'utilisateur connecté, et les dates sont celles du serveur. La référence `SR-AAAA-NNNN` vient d'un compteur incrémenté dans la même transaction.
+- **Photos** : compressées dans l'app et stockées dans Firestore (moins de 900 Ko, images uniquement), lisibles par l'agence et les occupants du logement seulement. Pas besoin de Cloud Storage ni de l'offre payante.
 - **Comptes** : les comptes agence restent « en attente » jusqu'à validation par un administrateur. Le premier administrateur se désigne une seule fois.
-- **Tests** : `npm run test:db` (55 vérifications, également exécutées en CI) et `scripts/e2e-connected.mjs` (13 étapes croisées application ⇄ tableau de bord).
+- **Tests** : `npm run test:rules` (47 vérifications, également exécutées en CI) et `scripts/e2e-connected.mjs` (14 étapes croisées application ⇄ tableau de bord sur les émulateurs).
 
 ### Sécurité
 
-- Seules l'URL du projet et la clé **publique** (anon / publishable) sont intégrées aux applications. La clé `service_role` ne doit jamais s'y trouver.
-- En mode démonstration, localStorage ne sert qu'aux données fictives. En mode connecté, la session est gérée par Supabase Auth, avec des jetons courts renouvelés automatiquement.
-- Les gardes de routes côté client ne servent qu'à l'expérience utilisateur : chaque requête est vérifiée par la base.
-- Les champs sont validés côté client **et** par des contraintes en base.
+- Seule la configuration web **publique** de Firebase est intégrée aux applications (`src/config/firebase.ts`) : c'est prévu ainsi par Firebase, les règles protègent les données. Aucune clé de compte de service ne doit s'y trouver.
+- En mode démonstration, localStorage ne sert qu'aux données fictives. En mode connecté, la session est gérée par Firebase Authentication.
+- Les gardes de routes côté client ne servent qu'à l'expérience utilisateur : chaque lecture et écriture est vérifiée par les règles.
+- Les champs sont validés côté client **et** par les règles (longueurs, valeurs autorisées).
 - Les erreurs réseau, de session expirée (`unauthorized`) et de stockage plein sont gérées et affichées. Une panne réseau ne déconnecte pas le résident.
 
 ## Prochaines étapes recommandées
 
-1. Faire la mise en service ([docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md)) et lancer un pilote sur une résidence.
-2. Configurer un SMTP propre à l'agence pour les e-mails de confirmation et de réinitialisation.
+1. Faire la mise en service ([docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md)) et lancer un pilote sur une résidence.
+2. Personnaliser l'e-mail de réinitialisation du mot de passe (Authentication → Modèles).
 3. Ajouter les notifications push sur téléphone (Firebase Cloud Messaging). Les préférences de notification sont déjà en place.
 4. Signer une version *release* de l'APK pour le Play Store, avec une clé conservée en secret GitHub.
 5. Ajouter la photo d'intervention côté agence, et l'export des signalements (CSV) pour le reporting.

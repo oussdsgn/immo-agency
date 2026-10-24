@@ -7,5 +7,6 @@ dist
 test-results
 .DS_Store
 dist-dashboard
-supabase/.temp
-supabase/.branches
+firebase-debug.log
+firestore-debug.log
+ui-debug.log

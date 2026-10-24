@@ -1,13 +1,14 @@
 /**
- * Dashboard queries and actions. Status changes, info requests and dispatch
- * go through the database RPCs, which enforce the workflow and write the
- * timeline + resident notifications.
+ * Dashboard queries and actions on Firestore. Status changes, info requests
+ * and dispatch go through the shared ops (src/services/firebase/ops.ts), which
+ * write the timeline event and resident notifications in the same batch, as
+ * firebase/firestore.rules require.
  */
+import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
 import { emitChange } from '@/services/events'
-import { q, requireDb, type ReportStatus, type Row } from './supabase'
-
-export const REPORT_LIST_SELECT =
-  'id, reference, title, category, urgency, status, created_at, updated_at, scheduled_at, feedback_rating, feedback_at, assignee_id, unit_id, unit:units(number, floor, building:buildings(name, residence:residences(id, name))), resident:profiles(full_name, phone, email), technician:technicians(id, name, trade)'
+import * as ops from '@/services/firebase/ops'
+import { iso, reportReference, type EventDoc, type MessageDoc, type PhotoDoc, type ReportDoc, type TechnicianDoc } from '@/services/firebase/schema'
+import { auth, db, type ReportStatus } from './firebase'
 
 export interface ReportListItem {
   id: string
@@ -25,7 +26,7 @@ export interface ReportListItem {
   unit_id: string
   unit: { number: string; floor: number | null; building: { name: string; residence: { id: string; name: string } | null } | null } | null
   resident: { full_name: string; phone: string | null; email: string | null } | null
-  technician: { id: string; name: string; trade: string } | null
+  technician: { id: string; name: string } | null
 }
 
 export const OPEN_STATUSES: ReportStatus[] = ['submitted', 'under_review', 'in_progress', 'awaiting_resident']
@@ -44,67 +45,112 @@ export function byPriority(a: ReportListItem, b: ReportListItem) {
   return URGENCY_RANK[a.urgency] - URGENCY_RANK[b.urgency] || a.created_at.localeCompare(b.created_at)
 }
 
+export function toListItem(id: string, r: ReportDoc): ReportListItem {
+  const created = iso(r.createdAt)
+  return {
+    id,
+    reference: reportReference(r.number, new Date(created)),
+    title: r.title,
+    category: r.category,
+    urgency: r.urgency,
+    status: r.status,
+    created_at: created,
+    updated_at: iso(r.updatedAt),
+    scheduled_at: r.scheduledAt ? iso(r.scheduledAt) : null,
+    feedback_rating: r.feedback?.rating ?? null,
+    feedback_at: r.feedback ? iso(r.feedback.at) : null,
+    assignee_id: r.assigneeId,
+    unit_id: r.unitId,
+    unit: {
+      number: r.unitLabel.number,
+      floor: r.unitLabel.floor,
+      building: { name: r.unitLabel.buildingName ?? '', residence: { id: r.residenceId, name: r.unitLabel.residenceName } },
+    },
+    resident: { full_name: r.residentName, phone: r.residentPhone, email: r.residentEmail },
+    technician: r.assigneeId ? { id: r.assigneeId, name: r.assigneeName ?? '' } : null,
+  }
+}
+
 export async function listReports(): Promise<ReportListItem[]> {
-  const db = requireDb()
-  const rows = await q(db.from('reports').select(REPORT_LIST_SELECT).order('updated_at', { ascending: false }).limit(1000))
-  return rows as unknown as ReportListItem[]
+  const snap = await getDocs(collection(db, 'reports'))
+  return snap.docs.map((d) => toListItem(d.id, d.data() as ReportDoc)).sort((a, b) => b.updated_at.localeCompare(a.updated_at))
 }
 
 export interface ReportDetail extends ReportListItem {
   description: string
   location: string
   feedback_comment: string | null
-  events: Row<'report_events'>[]
-  messages: Row<'report_messages'>[]
-  photos: (Row<'report_photos'> & { url: string })[]
+  events: { id: string; status: ReportStatus; at: string; note: string | null; source: string; technician_name: string | null; scheduled_at: string | null }[]
+  messages: { id: string; author_kind: 'resident' | 'agency'; author_name: string; body: string; is_info_request: boolean; at: string }[]
+  photos: { id: string; url: string; name: string; size_bytes: number; at: string; added_kind: 'resident' | 'agency'; message_id: string | null }[]
 }
 
 export async function getReport(id: string): Promise<ReportDetail> {
-  const db = requireDb()
-  const r = await q(
-    db
-      .from('reports')
-      .select(`${REPORT_LIST_SELECT}, description, location, feedback_comment, events:report_events(*), messages:report_messages(*), photos:report_photos(*)`)
-      .eq('id', id)
-      .single(),
-  )
-  const detail = r as unknown as Omit<ReportDetail, 'photos'> & { photos: Row<'report_photos'>[] }
-  const paths = detail.photos.map((p) => p.path)
-  const { data: signed } = paths.length ? await db.storage.from('report-photos').createSignedUrls(paths, 3600) : { data: [] }
-  const url = new Map((signed ?? []).map((s) => [s.path, s.signedUrl]))
+  const snap = await getDoc(doc(db, 'reports', id))
+  if (!snap.exists()) throw new ops.OpError('not_found')
+  const r = snap.data() as ReportDoc
+  const sub = (name: string) => getDocs(collection(db, 'reports', id, name))
+  const [e, m, p] = await Promise.all([sub('events'), sub('messages'), sub('photos')])
+  const byAt = (a: { at: string }, b: { at: string }) => a.at.localeCompare(b.at)
   return {
-    ...detail,
-    events: [...detail.events].sort((a, b) => a.at.localeCompare(b.at)),
-    messages: [...detail.messages].sort((a, b) => a.at.localeCompare(b.at)),
-    photos: detail.photos.map((p) => ({ ...p, url: url.get(p.path) ?? '' })).sort((a, b) => a.at.localeCompare(b.at)),
+    ...toListItem(id, r),
+    description: r.description,
+    location: r.location,
+    feedback_comment: r.feedback?.comment ?? null,
+    events: e.docs
+      .map((d) => {
+        const x = d.data() as EventDoc
+        return { id: d.id, status: x.status, at: iso(x.at), note: x.note, source: x.source, technician_name: x.technicianName, scheduled_at: x.scheduledAt ? iso(x.scheduledAt) : null }
+      })
+      .sort(byAt),
+    messages: m.docs
+      .map((d) => {
+        const x = d.data() as MessageDoc
+        return { id: d.id, author_kind: x.authorKind, author_name: x.authorName, body: x.body, is_info_request: x.isInfoRequest, at: iso(x.at) }
+      })
+      .sort(byAt),
+    photos: p.docs
+      .map((d) => {
+        const x = d.data() as PhotoDoc
+        return { id: d.id, url: x.data, name: x.name, size_bytes: x.sizeBytes, at: iso(x.at), added_kind: x.addedKind, message_id: x.messageId }
+      })
+      .sort(byAt),
   }
 }
 
+/** The signed-in staff member, as recorded on timeline events and messages. */
+export async function staffActor(): Promise<ops.Actor> {
+  const user = auth.currentUser
+  if (!user) throw new ops.OpError('not_allowed')
+  const s = await getDoc(doc(db, 'staff', user.uid))
+  return { uid: user.uid, name: (s.data()?.fullName as string | undefined) || user.email || 'Agence' }
+}
+
 export async function setStatus(reportId: string, status: ReportStatus, note?: string) {
-  await q(requireDb().rpc('set_report_status', { p_report: reportId, p_status: status, p_note: note || undefined }))
+  await ops.setReportStatus(db, await staffActor(), reportId, status, note)
   emitChange('reports')
 }
 
 export async function requestInfo(reportId: string, body: string) {
-  await q(requireDb().rpc('request_info', { p_report: reportId, p_body: body }))
+  await ops.requestInfo(db, await staffActor(), reportId, body)
   emitChange('reports')
 }
 
 export async function dispatch(reportId: string, technicianId: string, scheduledAt: string, note?: string) {
-  await q(requireDb().rpc('dispatch_report', { p_report: reportId, p_technician: technicianId, p_scheduled_at: scheduledAt, p_note: note || undefined }))
+  await ops.dispatchReport(db, await staffActor(), reportId, technicianId, new Date(scheduledAt), note)
   emitChange('reports')
 }
 
 export async function sendMessage(reportId: string, body: string) {
-  // author_kind / author_name are set by the server from the caller.
-  await q(requireDb().from('report_messages').insert({ report_id: reportId, body: body.trim(), author_kind: 'agency' }))
+  await ops.sendAgencyMessage(db, await staffActor(), reportId, body)
   emitChange('reports')
 }
 
-export async function listTechnicians(includeInactive = false) {
-  let query = requireDb().from('technicians').select('*').order('name')
-  if (!includeInactive) query = query.eq('active', true)
-  return q(query)
+export type Technician = TechnicianDoc & { id: string }
+
+export async function listTechnicians(includeInactive = false): Promise<Technician[]> {
+  const snap = await getDocs(includeInactive ? collection(db, 'technicians') : query(collection(db, 'technicians'), where('active', '==', true)))
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as TechnicianDoc) })).sort((a, b) => a.name.localeCompare(b.name))
 }
 
 /** Value for <input type="datetime-local"> in the browser's time zone. */

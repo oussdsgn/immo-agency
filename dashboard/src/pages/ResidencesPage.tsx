@@ -11,14 +11,13 @@ import { useAsync } from '@/lib/useAsync'
 import { emitChange } from '@/services/events'
 import type { BuildingVisual } from '@/types'
 import { isOpenStatus, listReports } from '@dash/lib/data'
-import { errorMessage, q, requireDb } from '@dash/lib/supabase'
+import { useStaff } from '@dash/auth/staff'
+import { createResidence, listResidences } from '@dash/lib/admin'
+import { db, errorMessage } from '@dash/lib/firebase'
+import { seedDemo } from '@/services/firebase/seed'
 
 async function load() {
-  const db = requireDb()
-  const [residences, reports] = await Promise.all([
-    q(db.from('residences').select('id, name, address, city, palette, style, floors, buildings(id, units(id))').order('name')),
-    listReports(),
-  ])
+  const [residences, reports] = await Promise.all([listResidences(), listReports()])
   return residences.map((r) => ({
     ...r,
     units: r.buildings.reduce((n, b) => n + b.units.length, 0),
@@ -45,7 +44,12 @@ export function ResidencesPage() {
         {(list) =>
           list.length === 0 ? (
             <Card>
-              <EmptyState icon={<Building2 />} title="Aucune résidence" body="Créez votre première résidence pour y ajouter des bâtiments et des logements." />
+              <EmptyState
+                icon={<Building2 />}
+                title="Aucune résidence"
+                body="Créez votre première résidence pour y ajouter des bâtiments et des logements."
+                action={<LoadExamples />}
+              />
             </Card>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -86,9 +90,9 @@ function CreateResidence({ onClose }: { onClose: () => void }) {
     if (v.name.trim().length < 2) return setError('Indiquez le nom de la résidence.')
     setBusy(true)
     try {
-      const row = await q(requireDb().from('residences').insert({ name: v.name.trim(), address: v.address.trim(), city: v.city.trim() }).select('id').single())
+      const id = await createResidence(v)
       emitChange('all')
-      navigate(`/immeubles/${row.id}`)
+      navigate(`/immeubles/${id}`)
     } catch (err) {
       setError(errorMessage(err))
       setBusy(false)
@@ -117,5 +121,34 @@ function CreateResidence({ onClose }: { onClose: () => void }) {
         </div>
       </form>
     </Card>
+  )
+}
+
+/** Admin, first run: fictional residences, apartments (codes BAHIA12A…), technicians, announcements and listings. */
+function LoadExamples() {
+  const { profile } = useStaff()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  if (profile?.role !== 'admin') return null
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <Button
+        variant="secondary"
+        loading={busy}
+        onClick={async () => {
+          setBusy(true)
+          try {
+            await seedDemo(db)
+            emitChange('all')
+          } catch (err) {
+            setError(errorMessage(err))
+          }
+          setBusy(false)
+        }}
+      >
+        Charger les exemples
+      </Button>
+      {error && <FieldError>{error}</FieldError>}
+    </div>
   )
 }

@@ -1,28 +1,23 @@
 import type { Services } from './contracts'
+import { createFirebaseServices } from './firebase/firebaseServices'
 import { createMockServices } from './mock/mockServices'
 import { createBrowserStore } from './mock/storage'
-import { createSupabaseServices } from './supabase/supabaseServices'
 
 /**
- * Single place where the data source is chosen.
+ * Single place where the data source is chosen (VITE_DATA_SOURCE at build time):
  *
- * - With VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY set at build time, the
- *   app talks to the agency's Supabase project (real accounts, shared data,
- *   live updates with the agency dashboard).
- * - Without them, it runs on the local demo data (prototype mode).
+ * - `firebase` (default for production builds): the agency's Firebase project
+ *   — real accounts, shared data, live updates with the agency dashboard.
+ * - `mock` (default for `npm run dev`): local demo data, no account needed.
  *
- * The anon / publishable key is designed to be public: access is enforced by
- * row level security in the database. Never put the service-role key in a
- * VITE_* variable.
+ * The Firebase web config is public by design; access is enforced by
+ * firebase/firestore.rules. Never put a service-account key in a VITE_* variable.
  */
-const url = import.meta.env.VITE_SUPABASE_URL
-const key = import.meta.env.VITE_SUPABASE_ANON_KEY
+const source = import.meta.env.VITE_DATA_SOURCE ?? (import.meta.env.DEV ? 'mock' : 'firebase')
 
-export const IS_MOCK_DATA = !(url && key)
+export const IS_MOCK_DATA = source !== 'firebase'
 
-export const services: Services = IS_MOCK_DATA
-  ? createMockServices({ store: createBrowserStore() })
-  : createSupabaseServices(url!, key!)
+export const services: Services = IS_MOCK_DATA ? createMockServices({ store: createBrowserStore() }) : createFirebaseServices()
 
 export type { Services } from './contracts'
 export { ServiceError, errorCode } from './errors'

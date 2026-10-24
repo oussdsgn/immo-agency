@@ -17,7 +17,7 @@ import { cn } from '@/lib/cn'
 import { useAsync } from '@/lib/useAsync'
 import type { Attachment, Report, ReportCategoryId, StatusEvent } from '@/types'
 import { dispatch, getReport, isOpenStatus, listTechnicians, requestInfo, sendMessage, setStatus, toLocalInput, unitLabel, type ReportDetail } from '@dash/lib/data'
-import { errorMessage, type ReportStatus } from '@dash/lib/supabase'
+import { errorMessage, type ReportStatus } from '@dash/lib/firebase'
 
 export function ReportDetailPage() {
   const { id = '' } = useParams()

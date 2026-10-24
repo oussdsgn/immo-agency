@@ -12,7 +12,8 @@ import { useI18n } from '@/i18n'
 import { useAsync } from '@/lib/useAsync'
 import { emitChange } from '@/services/events'
 import { listTechnicians } from '@dash/lib/data'
-import { errorMessage, q, requireDb } from '@dash/lib/supabase'
+import { addTechnician, setTechnicianActive } from '@dash/lib/admin'
+import { errorMessage } from '@dash/lib/firebase'
 
 export function TechniciansPage() {
   const { t } = useI18n()
@@ -28,7 +29,7 @@ export function TechniciansPage() {
     setBusy(true)
     setError(null)
     try {
-      await q(requireDb().from('technicians').insert({ name: v.name.trim(), trade: v.trade, phone: v.phone.trim() || null, company: v.company.trim() || null }))
+      await addTechnician({ name: v.name.trim(), trade: v.trade, phone: v.phone.trim() || null, company: v.company.trim() || null })
       setV({ name: '', trade: v.trade, phone: '', company: '' })
       toast('Technicien ajouté')
       emitChange('all')
@@ -40,7 +41,7 @@ export function TechniciansPage() {
 
   async function toggle(id: string, active: boolean) {
     try {
-      await q(requireDb().from('technicians').update({ active }).eq('id', id))
+      await setTechnicianActive(id, active)
       emitChange('all')
     } catch (err) {
       toast(errorMessage(err), 'error')

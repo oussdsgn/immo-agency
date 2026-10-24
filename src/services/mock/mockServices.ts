@@ -141,7 +141,7 @@ export function createMockServices({ store, latency = [250, 650], now = Date.now
   const services: Services = {
     auth: {
       mode: 'demo',
-      // Real accounts only exist with the Supabase data source.
+      // Real accounts only exist with the Firebase data source.
       signIn: () => Promise.reject(new ServiceError('validation')),
       signUp: () => Promise.reject(new ServiceError('validation')),
       sendPasswordReset: () => Promise.reject(new ServiceError('validation')),
@@ -181,7 +181,7 @@ export function createMockServices({ store, latency = [250, 650], now = Date.now
     },
 
     properties: {
-      // Demo units are fixed; codes only exist with the Supabase data source.
+      // Demo units are fixed; codes only exist with the Firebase data source.
       claimUnit: () =>
         call('write', () => {
           throw new ServiceError('not_found')

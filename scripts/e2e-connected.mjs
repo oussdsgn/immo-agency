@@ -1,10 +1,10 @@
 /**
- * Cross-app end-to-end test: resident app ⇄ Supabase ⇄ agency dashboard.
+ * Cross-app end-to-end test: resident app ⇄ Firebase ⇄ agency dashboard.
  *
- * Needs the local Supabase stack and both apps running against it:
- *   npx supabase start && npx supabase db reset
- *   VITE_SUPABASE_URL=… VITE_SUPABASE_ANON_KEY=… npx vite --port 5174
- *   VITE_SUPABASE_URL=… VITE_SUPABASE_ANON_KEY=… npm run dev:dashboard -- --port 5180
+ * Needs the Firebase emulators (cleared by this script) and both apps running against them:
+ *   npm run emulators
+ *   VITE_DATA_SOURCE=firebase VITE_FIREBASE_EMULATOR=127.0.0.1 npx vite --port 5174
+ *   VITE_FIREBASE_EMULATOR=127.0.0.1 npm run dev:dashboard -- --port 5180
  *   node scripts/e2e-connected.mjs
  */
 import { mkdirSync } from 'node:fs'
@@ -14,6 +14,10 @@ import { chromium } from 'playwright-core'
 const APP = process.env.APP_URL ?? 'http://localhost:5174'
 const DASH = process.env.DASH_URL ?? 'http://localhost:5180'
 const SHOTS = process.env.SHOTS ?? 'test-results/connected'
+const EMULATOR = process.env.FIREBASE_EMULATOR ?? '127.0.0.1'
+// Start from empty emulators (the first dashboard account becomes admin).
+await fetch(`http://${EMULATOR}:8080/emulator/v1/projects/demo-immo-agency/databases/(default)/documents`, { method: 'DELETE' })
+await fetch(`http://${EMULATOR}:9099/emulator/v1/projects/demo-immo-agency/accounts`, { method: 'DELETE' })
 mkdirSync(SHOTS, { recursive: true })
 
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {})
@@ -63,8 +67,13 @@ await check('agency: first sign-up waits for approval, then becomes admin', asyn
   await agency.getByText('En direct', { exact: true }).filter({ visible: true }).waitFor(LIVE)
 })
 
-await check('agency: adds an apartment and gets its access code', async () => {
+await check('agency: loads the example residences', async () => {
   await agency.getByRole('link', { name: 'Immeubles' }).click()
+  await agency.getByRole('button', { name: 'Charger les exemples' }).click()
+  await agency.getByRole('link', { name: /Résidence El Bahia/ }).waitFor()
+})
+
+await check('agency: adds an apartment and gets its access code', async () => {
   await agency.getByRole('link', { name: /Résidence El Bahia/ }).click()
   await agency.getByText('BAHIA12A').waitFor()
   const section = agency.getByRole('region', { name: 'Bâtiment A' })

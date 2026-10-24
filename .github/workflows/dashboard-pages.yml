@@ -1,7 +1,7 @@
 # Publishes the agency dashboard to GitHub Pages:
 #   https://<owner>.github.io/<repo>/
-# One-time setup: Settings → Pages → Source: "GitHub Actions", and the repo
-# variables VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY (see docs/SUPABASE_SETUP.md).
+# One-time setup: Settings → Pages → Source: "GitHub Actions" (see
+# docs/FIREBASE_SETUP.md). The Firebase web config is in src/config/firebase.ts.
 name: Dashboard (GitHub Pages)
 
 on:
@@ -30,8 +30,6 @@ jobs:
       - run: npm ci
       - name: Build dashboard
         env:
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
           DASHBOARD_BASE: /${{ github.event.repository.name }}/
         run: |
           npx vite build --config vite.dashboard.config.ts

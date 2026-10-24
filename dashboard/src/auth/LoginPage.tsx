@@ -1,5 +1,6 @@
 import { LogIn, UserPlus } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Logo } from '@/components/layout/Logo'
 import { Button } from '@/components/ui/Button'
@@ -7,11 +8,12 @@ import { Card } from '@/components/ui/Card'
 import { TextField } from '@/components/ui/Field'
 import { isValidEmail } from '@/domain/reportValidation'
 import { InlineAlert } from '@/features/reports/new/Steps'
-import { db, errorMessage } from '@dash/lib/supabase'
+import { requestStaffAccess } from '@/services/firebase/ops'
+import { auth, db, errorMessage } from '@dash/lib/firebase'
 import { isStaffRole, useStaff } from './staff'
 
 export function LoginPage() {
-  const { session, profile, ready } = useStaff()
+  const { session, profile, ready, refresh } = useStaff()
   const navigate = useNavigate()
   const location = useLocation()
   const [mode, setMode] = useState<'signIn' | 'signUp'>('signIn')
@@ -24,7 +26,7 @@ export function LoginPage() {
 
   async function submit(e: FormEvent) {
     e.preventDefault()
-    if (!db || busy) return
+    if (busy) return
     setAlert(null)
     if (!isValidEmail(v.email)) return setAlert({ tone: 'error', text: 'Adresse e-mail invalide.' })
     if (v.password.length < 8) return setAlert({ tone: 'error', text: 'Le mot de passe doit contenir au moins 8 caractères.' })
@@ -32,27 +34,23 @@ export function LoginPage() {
     setBusy(true)
     try {
       if (mode === 'signIn') {
-        const { error } = await db.auth.signInWithPassword({ email: v.email.trim(), password: v.password })
-        if (error) throw error
+        await signInWithEmailAndPassword(auth, v.email.trim(), v.password)
         navigate(from, { replace: true })
       } else {
-        const { data, error } = await db.auth.signUp({
-          email: v.email.trim(),
-          password: v.password,
-          options: { data: { full_name: v.name.trim(), app: 'dashboard' }, emailRedirectTo: window.location.href.split('#')[0] },
-        })
-        if (error) throw error
-        if (!data.session) setAlert({ tone: 'info', text: 'Compte créé. Confirmez votre adresse via l’e-mail reçu, puis connectez-vous.' })
+        const { user } = await createUserWithEmailAndPassword(auth, v.email.trim(), v.password)
+        await updateProfile(user, { displayName: v.name.trim() }).catch(() => undefined)
+        await requestStaffAccess(db, user.uid, { fullName: v.name.trim(), email: v.email.trim() })
+        await refresh()
       }
     } catch (err) {
-      const m = (err as { message?: string }).message ?? ''
+      const code = (err as { code?: string }).code ?? ''
       setAlert({
         tone: 'error',
-        text: /invalid/i.test(m)
+        text: ['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found', 'auth/invalid-email'].includes(code)
           ? 'E-mail ou mot de passe incorrect.'
-          : /not confirmed/i.test(m)
-            ? 'Confirmez d’abord votre adresse via l’e-mail reçu.'
-            : /registered/i.test(m)
+          : code === 'auth/too-many-requests'
+            ? 'Trop de tentatives. Réessayez dans quelques minutes.'
+            : code === 'auth/email-already-in-use'
               ? 'Un compte existe déjà avec cette adresse.'
               : errorMessage(err),
       })

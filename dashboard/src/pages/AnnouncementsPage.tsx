@@ -10,14 +10,11 @@ import { useToast } from '@/components/ui/Toast'
 import { useI18n } from '@/i18n'
 import { useAsync } from '@/lib/useAsync'
 import { emitChange } from '@/services/events'
-import { errorMessage, q, requireDb } from '@dash/lib/supabase'
+import { deleteAnnouncement, listAnnouncements, listResidences, publishAnnouncement } from '@dash/lib/admin'
+import { errorMessage } from '@dash/lib/firebase'
 
 async function load() {
-  const db = requireDb()
-  return Promise.all([
-    q(db.from('residences').select('id, name').order('name')),
-    q(db.from('announcements').select('*, residence:residences(name)').order('published_at', { ascending: false }).limit(100)),
-  ])
+  return Promise.all([listResidences(), listAnnouncements()])
 }
 
 export function AnnouncementsPage() {
@@ -44,11 +41,11 @@ export function AnnouncementsPage() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="font-bold text-ink">{a.title_fr}</h3>
+                            <h3 className="font-bold text-ink">{a.titleFr}</h3>
                             {a.important && <Badge tone="brand">Important</Badge>}
                           </div>
                           <p className="text-xs text-muted">
-                            {(a.residence as { name: string } | null)?.name} · {f.dateTime(a.published_at)}
+                            {a.residenceName} · {f.dateTime(a.published_at)}
                           </p>
                         </div>
                         <button
@@ -58,7 +55,7 @@ export function AnnouncementsPage() {
                           onClick={async () => {
                             if (!window.confirm('Supprimer cette annonce ? Elle disparaîtra de l’application des résidents.')) return
                             try {
-                              await q(requireDb().from('announcements').delete().eq('id', a.id))
+                              await deleteAnnouncement(a.id)
                               emitChange('all')
                             } catch (err) {
                               toast(errorMessage(err), 'error')
@@ -68,9 +65,9 @@ export function AnnouncementsPage() {
                           <Trash2 className="size-4" aria-hidden />
                         </button>
                       </div>
-                      <p className="mt-2 text-sm text-ink-soft">{a.body_fr}</p>
+                      <p className="mt-2 text-sm text-ink-soft">{a.bodyFr}</p>
                       <p lang="ar" dir="rtl" className="mt-2 border-t border-line pt-2 text-sm text-ink-soft">
-                        <span className="font-semibold">{a.title_ar}</span> — {a.body_ar}
+                        <span className="font-semibold">{a.titleAr}</span> — {a.bodyAr}
                       </p>
                     </Card>
                   ))}
@@ -97,16 +94,15 @@ function Compose({ residences }: { residences: { id: string; name: string }[] })
     setBusy(true)
     setError(null)
     try {
-      await q(
-        requireDb().from('announcements').insert({
-          residence_id: v.residence,
-          title_fr: v.title_fr.trim(),
-          body_fr: v.body_fr.trim(),
-          title_ar: v.title_ar.trim(),
-          body_ar: v.body_ar.trim(),
-          important: v.important,
-        }),
-      )
+      await publishAnnouncement({
+        residenceId: v.residence,
+        residenceName: residences.find((r) => r.id === v.residence)?.name ?? '',
+        titleFr: v.title_fr.trim(),
+        bodyFr: v.body_fr.trim(),
+        titleAr: v.title_ar.trim(),
+        bodyAr: v.body_ar.trim(),
+        important: v.important,
+      })
       setV({ ...v, title_fr: '', body_fr: '', title_ar: '', body_ar: '', important: false })
       toast('Annonce publiée — les résidents sont notifiés')
       emitChange('all')

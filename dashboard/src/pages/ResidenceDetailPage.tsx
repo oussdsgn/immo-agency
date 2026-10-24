@@ -11,25 +11,24 @@ import { useI18n } from '@/i18n'
 import { useAsync } from '@/lib/useAsync'
 import { emitChange } from '@/services/events'
 import { useStaff } from '@dash/auth/staff'
-import { errorMessage, q, requireDb, type Row } from '@dash/lib/supabase'
+import {
+  addBuilding,
+  addUnit,
+  deleteBuilding,
+  deleteResidence,
+  deleteUnit,
+  getResidence,
+  regenerateCode,
+  removeMember,
+  updateResidence,
+  type Building,
+  type Residence,
+} from '@dash/lib/admin'
+import { errorMessage } from '@dash/lib/firebase'
 
 const APP_LINK = 'https://github.com/oussdsgn/immo-agency/releases/latest/download/IMMO-Agency.apk'
 
-async function load(id: string) {
-  const db = requireDb()
-  const [residence, buildings, codes, members] = await Promise.all([
-    q(db.from('residences').select('*').eq('id', id).single()),
-    q(db.from('buildings').select('id, name, units(id, floor, number, area_sqm, rooms)').eq('residence_id', id).order('name')),
-    q(db.rpc('unit_access_codes')),
-    q(db.from('unit_members').select('unit_id, profile_id, occupancy, profile:profiles(full_name, email, phone)')),
-  ])
-  return {
-    residence,
-    buildings: buildings.map((b) => ({ ...b, units: [...b.units].sort((x, y) => (x.floor ?? 0) - (y.floor ?? 0) || x.number.localeCompare(y.number, 'fr', { numeric: true })) })),
-    codes: new Map(codes.map((c) => [c.unit_id, c.access_code])),
-    members,
-  }
-}
+const load = getResidence
 
 type Data = Awaited<ReturnType<typeof load>>
 
@@ -80,7 +79,7 @@ function useSave() {
 
 const AMENITIES = ['elevator', 'parking', 'concierge', 'garden', 'pool', 'security'] as const
 
-function ResidenceForm({ r }: { r: Row<'residences'> }) {
+function ResidenceForm({ r }: { r: Residence }) {
   const { t } = useI18n()
   const { profile } = useStaff()
   const navigate = useNavigate()
@@ -89,11 +88,11 @@ function ResidenceForm({ r }: { r: Row<'residences'> }) {
     name: r.name,
     address: r.address,
     city: r.city,
-    manager_name: r.manager_name ?? '',
+    manager_name: r.managerName ?? '',
     phone: r.phone ?? '',
     email: r.email ?? '',
-    emergency_phone: r.emergency_phone ?? '',
-    guard_phone: r.guard_phone ?? '',
+    emergency_phone: r.emergencyPhone ?? '',
+    guard_phone: r.guardPhone ?? '',
     amenities: r.amenities,
     palette: r.palette,
     style: r.style,
@@ -113,25 +112,20 @@ function ResidenceForm({ r }: { r: Row<'residences'> }) {
           e.preventDefault()
           void save(
             () =>
-              q(
-                requireDb()
-                  .from('residences')
-                  .update({
-                    name: v.name.trim(),
-                    address: v.address.trim(),
-                    city: v.city.trim(),
-                    manager_name: nul(v.manager_name),
-                    phone: nul(v.phone),
-                    email: nul(v.email),
-                    emergency_phone: nul(v.emergency_phone),
-                    guard_phone: nul(v.guard_phone),
-                    amenities: v.amenities,
-                    palette: v.palette,
-                    style: v.style,
-                    floors: Number(v.floors) || 4,
-                  })
-                  .eq('id', r.id),
-              ),
+              updateResidence(r.id, {
+                name: v.name.trim(),
+                address: v.address.trim(),
+                city: v.city.trim(),
+                managerName: nul(v.manager_name),
+                phone: nul(v.phone),
+                email: nul(v.email),
+                emergencyPhone: nul(v.emergency_phone),
+                guardPhone: nul(v.guard_phone),
+                amenities: v.amenities,
+                palette: v.palette,
+                style: v.style,
+                floors: Number(v.floors) || 4,
+              }),
             'Résidence enregistrée',
           )
         }}
@@ -191,7 +185,7 @@ function ResidenceForm({ r }: { r: Row<'residences'> }) {
               icon={<Trash2 className="size-4" aria-hidden />}
               onClick={async () => {
                 if (!window.confirm(`Supprimer « ${r.name} » ? Impossible si des signalements y sont liés.`)) return
-                if (await save(() => q(requireDb().from('residences').delete().eq('id', r.id)), 'Résidence supprimée')) navigate('/immeubles')
+                if (await save(() => deleteResidence(r.id), 'Résidence supprimée')) navigate('/immeubles')
               }}
             >
               Supprimer
@@ -203,7 +197,7 @@ function ResidenceForm({ r }: { r: Row<'residences'> }) {
   )
 }
 
-function BuildingCard({ b, data }: { b: Data['buildings'][number]; data: Data }) {
+function BuildingCard({ b, data }: { b: Building; data: Data }) {
   const toast = useToast()
   const { save, error } = useSave()
   const residence = data.residence
@@ -226,7 +220,7 @@ function BuildingCard({ b, data }: { b: Data['buildings'][number]; data: Data })
             <button
               type="button"
               className="text-sm font-semibold text-danger-ink hover:underline"
-              onClick={() => window.confirm(`Supprimer le bâtiment ${b.name} ?`) && void save(() => q(requireDb().from('buildings').delete().eq('id', b.id)), 'Bâtiment supprimé')}
+              onClick={() => window.confirm(`Supprimer le bâtiment ${b.name} ?`) && void save(() => deleteBuilding(b.id), 'Bâtiment supprimé')}
             >
               Supprimer
             </button>
@@ -248,8 +242,8 @@ function BuildingCard({ b, data }: { b: Data['buildings'][number]; data: Data })
               </thead>
               <tbody className="divide-y divide-line">
                 {b.units.map((u) => {
-                  const code = data.codes.get(u.id) ?? '—'
-                  const people = data.members.filter((m) => m.unit_id === u.id)
+                  const code = u.code
+                  const people = data.members.filter((m) => m.unitId === u.id)
                   const invite = `Bonjour, voici votre accès à l’application IMMO Agency pour l’appartement ${u.number}, bâtiment ${b.name}, ${residence.name}.\n1. Installez l’application : ${APP_LINK}\n2. Créez votre compte et saisissez le code logement : ${code}`
                   return (
                     <tr key={u.id} className="align-top">
@@ -258,7 +252,7 @@ function BuildingCard({ b, data }: { b: Data['buildings'][number]; data: Data })
                         <p className="text-xs text-muted">{u.floor === null ? '—' : u.floor === 0 ? 'Rez-de-chaussée' : `Étage ${u.floor}`}</p>
                       </td>
                       <td className="px-4 py-3 text-ink-soft">
-                        {u.area_sqm ? `${u.area_sqm} m²` : '—'}
+                        {u.areaSqm ? `${u.areaSqm} m²` : '—'}
                         {u.rooms ? ` · ${u.rooms} p.` : ''}
                       </td>
                       <td className="px-4 py-3">
@@ -271,7 +265,7 @@ function BuildingCard({ b, data }: { b: Data['buildings'][number]; data: Data })
                             label="Générer un nouveau code"
                             onClick={() =>
                               window.confirm('Générer un nouveau code ? L’ancien ne fonctionnera plus (les comptes déjà rattachés restent liés).') &&
-                              void save(() => q(requireDb().rpc('regenerate_access_code', { p_unit: u.id })), 'Nouveau code généré')
+                              void save(() => regenerateCode(u.id), 'Nouveau code généré')
                             }
                           >
                             <RefreshCw className="size-3.5" />
@@ -284,19 +278,19 @@ function BuildingCard({ b, data }: { b: Data['buildings'][number]; data: Data })
                         ) : (
                           <ul className="space-y-1">
                             {people.map((m) => (
-                              <li key={m.profile_id} className="flex items-center gap-2">
+                              <li key={m.uid} className="flex items-center gap-2">
                                 <span className="min-w-0">
-                                  <span className="block truncate font-semibold text-ink">{m.profile?.full_name || m.profile?.email}</span>
+                                  <span className="block truncate font-semibold text-ink">{m.fullName || m.email}</span>
                                   <span className="block truncate text-xs text-muted">
                                     {m.occupancy === 'owner' ? 'Propriétaire' : 'Locataire'}
-                                    {m.profile?.phone ? ` · ${m.profile.phone}` : ''}
+                                    {m.phone ? ` · ${m.phone}` : ''}
                                   </span>
                                 </span>
                                 <IconBtn
                                   label="Retirer l’accès"
                                   onClick={() =>
-                                    window.confirm(`Retirer l’accès de ${m.profile?.full_name || 'ce résident'} à ce logement ?`) &&
-                                    void save(() => q(requireDb().from('unit_members').delete().eq('unit_id', u.id).eq('profile_id', m.profile_id)), 'Accès retiré')
+                                    window.confirm(`Retirer l’accès de ${m.fullName || 'ce résident'} à ce logement ?`) &&
+                                    void save(() => removeMember(m.uid, u.id), 'Accès retiré')
                                   }
                                 >
                                   <UserMinus className="size-3.5" />
@@ -309,7 +303,7 @@ function BuildingCard({ b, data }: { b: Data['buildings'][number]; data: Data })
                       <td className="px-4 py-3 text-end">
                         <IconBtn
                           label="Supprimer le logement"
-                          onClick={() => window.confirm(`Supprimer l’appartement ${u.number} ?`) && void save(() => q(requireDb().from('units').delete().eq('id', u.id)), 'Logement supprimé')}
+                          onClick={() => window.confirm(`Supprimer l’appartement ${u.number} ?`) && void save(() => deleteUnit(u), 'Logement supprimé')}
                         >
                           <Trash2 className="size-3.5" />
                         </IconBtn>
@@ -326,7 +320,7 @@ function BuildingCard({ b, data }: { b: Data['buildings'][number]; data: Data })
             <FieldError>{error}</FieldError>
           </div>
         )}
-        <AddUnit buildingId={b.id} />
+        <AddUnit building={b} />
       </Card>
     </section>
   )
@@ -340,7 +334,7 @@ function IconBtn({ label, onClick, children }: { label: string; onClick: () => v
   )
 }
 
-function AddUnit({ buildingId }: { buildingId: string }) {
+function AddUnit({ building }: { building: Building }) {
   const { busy, error, save } = useSave()
   const [v, setV] = useState({ number: '', floor: '', area: '', rooms: '' })
   const num = (s: string) => (s.trim() === '' ? null : Number(s))
@@ -348,7 +342,7 @@ function AddUnit({ buildingId }: { buildingId: string }) {
     e.preventDefault()
     if (!v.number.trim()) return
     const ok = await save(
-      () => q(requireDb().from('units').insert({ building_id: buildingId, number: v.number.trim(), floor: num(v.floor), area_sqm: num(v.area), rooms: num(v.rooms) }).select('id').single()),
+      () => addUnit(building, { number: v.number.trim(), floor: num(v.floor), areaSqm: num(v.area), rooms: num(v.rooms) }),
       'Logement ajouté — son code d’accès est prêt',
     )
     if (ok) setV({ number: '', floor: '', area: '', rooms: '' })
@@ -380,7 +374,7 @@ function AddBuilding({ residenceId }: { residenceId: string }) {
         className="flex flex-wrap items-end gap-3"
         onSubmit={async (e) => {
           e.preventDefault()
-          if (name.trim() && (await save(() => q(requireDb().from('buildings').insert({ residence_id: residenceId, name: name.trim() })), 'Bâtiment ajouté'))) setName('')
+          if (name.trim() && (await save(() => addBuilding(residenceId, name), 'Bâtiment ajouté'))) setName('')
         }}
       >
         <div className="min-w-40 flex-1">

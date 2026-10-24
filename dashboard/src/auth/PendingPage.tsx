@@ -5,7 +5,8 @@ import { Logo } from '@/components/layout/Logo'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { InlineAlert } from '@/features/reports/new/Steps'
-import { db, errorMessage } from '@dash/lib/supabase'
+import { bootstrapAdmin, requestStaffAccess } from '@/services/firebase/ops'
+import { db, errorMessage } from '@dash/lib/firebase'
 import { isStaffRole, useStaff } from './staff'
 
 /** Signed in but not (yet) staff: waiting for approval, or a resident account. */
@@ -20,13 +21,29 @@ export function PendingPage() {
   const resident = profile?.role === 'resident'
 
   async function bootstrap() {
-    if (!db) return
+    if (!session) return
     setBusy(true)
-    const { data, error } = await db.rpc('bootstrap_admin')
+    try {
+      // A resident-app account (or an interrupted sign-up) has no staff entry yet.
+      await requestStaffAccess(db, session.uid, { fullName: profile?.full_name || session.displayName || '', email: session.email ?? '' })
+      if (await bootstrapAdmin(db, session.uid)) await refresh()
+      else setMsg({ tone: 'info', text: 'Un administrateur existe déjà : demandez-lui de valider votre compte dans « Équipe ».' })
+    } catch (err) {
+      setMsg({ tone: 'error', text: errorMessage(err) })
+    }
     setBusy(false)
-    if (error) return setMsg({ tone: 'error', text: errorMessage(error) })
-    if (data) await refresh()
-    else setMsg({ tone: 'info', text: 'Un administrateur existe déjà : demandez-lui de valider votre compte dans « Équipe ».' })
+  }
+
+  async function requestAccess() {
+    if (!session) return
+    setBusy(true)
+    try {
+      await requestStaffAccess(db, session.uid, { fullName: profile?.full_name || session.displayName || '', email: session.email ?? '' })
+      await refresh()
+    } catch (err) {
+      setMsg({ tone: 'error', text: errorMessage(err) })
+    }
+    setBusy(false)
   }
 
   return (
@@ -53,7 +70,7 @@ export function PendingPage() {
           <div className="mt-6 flex flex-col gap-2">
             {!resident && (
               <>
-                <Button variant="secondary" onClick={() => void refresh()} icon={<RefreshCw className="size-4" aria-hidden />}>
+                <Button variant="secondary" onClick={() => void (profile?.role ? refresh() : requestAccess())} icon={<RefreshCw className="size-4" aria-hidden />}>
                   Vérifier à nouveau
                 </Button>
                 <Button variant="ghost" onClick={bootstrap} loading={busy} icon={<ShieldCheck className="size-4" aria-hidden />} className="border border-line">

@@ -1,13 +1,21 @@
-import type { Session } from '@supabase/supabase-js'
+import { onAuthStateChanged, signOut as fbSignOut, type User } from 'firebase/auth'
+import { doc, getDoc } from 'firebase/firestore'
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
-import { db, type Row } from '@dash/lib/supabase'
+import type { StaffDoc } from '@/services/firebase/schema'
+import { auth, db } from '@dash/lib/firebase'
 
-type Profile = Pick<Row<'profiles'>, 'id' | 'full_name' | 'email' | 'role'>
+interface Profile {
+  id: string
+  full_name: string
+  email: string
+  /** `resident` when the account only exists in the resident app. */
+  role: StaffDoc['role'] | 'resident' | null
+}
 
 interface StaffState {
   ready: boolean
-  session: Session | null
+  session: User | null
   profile: Profile | null
   refresh: () => Promise<void>
   signOut: () => Promise<void>
@@ -15,40 +23,32 @@ interface StaffState {
 
 const Ctx = createContext<StaffState>({ ready: false, session: null, profile: null, refresh: async () => {}, signOut: async () => {} })
 
+async function loadProfile(user: User): Promise<Profile> {
+  const staff = await getDoc(doc(db, 'staff', user.uid)).catch(() => null)
+  if (staff?.exists()) {
+    const s = staff.data() as StaffDoc
+    return { id: user.uid, full_name: s.fullName, email: s.email, role: s.role }
+  }
+  const resident = await getDoc(doc(db, 'residents', user.uid)).catch(() => null)
+  return { id: user.uid, full_name: user.displayName ?? '', email: user.email ?? '', role: resident?.exists() ? 'resident' : null }
+}
+
 /**
- * Staff session. Access is decided by `profiles.role` in the database; the
- * guards below only shape the UI — RLS refuses data to non-staff anyway.
+ * Staff session. Access is decided by `staff/{uid}.role` in Firestore; the
+ * guards below only shape the UI — the security rules refuse data to
+ * non-staff anyway.
  */
 export function StaffProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<Omit<StaffState, 'refresh' | 'signOut'>>({ ready: !db, session: null, profile: null })
+  const [state, setState] = useState<Omit<StaffState, 'refresh' | 'signOut'>>({ ready: false, session: null, profile: null })
 
-  const load = useCallback(async (session: Session | null) => {
-    if (!db || !session) {
-      setState({ ready: true, session, profile: null })
-      return
-    }
-    const { data } = await db.from('profiles').select('id, full_name, email, role').eq('id', session.user.id).maybeSingle()
-    setState({ ready: true, session, profile: data ?? null })
+  const load = useCallback(async (user: User | null) => {
+    setState({ ready: true, session: user, profile: user ? await loadProfile(user) : null })
   }, [])
 
-  useEffect(() => {
-    if (!db) return
-    void db.auth.getSession().then(({ data }) => load(data.session))
-    const { data: sub } = db.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') void load(session)
-    })
-    return () => sub.subscription.unsubscribe()
-  }, [load])
+  useEffect(() => onAuthStateChanged(auth, (user) => void load(user)), [load])
 
-  const refresh = useCallback(async () => {
-    if (!db) return
-    const { data } = await db.auth.getSession()
-    await load(data.session)
-  }, [load])
-
-  const signOut = useCallback(async () => {
-    await db?.auth.signOut()
-  }, [])
+  const refresh = useCallback(() => load(auth.currentUser), [load])
+  const signOut = useCallback(() => fbSignOut(auth), [])
 
   return <Ctx.Provider value={{ ...state, refresh, signOut }}>{children}</Ctx.Provider>
 }

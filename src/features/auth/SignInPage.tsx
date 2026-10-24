@@ -12,7 +12,7 @@ import { AccountForms } from './AccountForms'
 
 /**
  * Entry screen. Prototype builds offer the labelled demo account; builds
- * connected to Supabase offer real sign-in / sign-up.
+ * connected to Firebase offer real sign-in / sign-up.
  */
 export function SignInPage() {
   const { t } = useI18n()

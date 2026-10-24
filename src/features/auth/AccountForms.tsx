@@ -13,7 +13,7 @@ type Errors = Partial<Record<'email' | 'password' | 'fullName' | 'phone' | 'unit
 
 const CODE_RE = /^[A-Z0-9]{8}$/i
 
-/** Real resident accounts (Supabase): sign in, sign up with a unit code, reset password. */
+/** Real resident accounts (Firebase): sign in, sign up with a unit code, reset password. */
 export function AccountForms({ onSignedIn }: { onSignedIn: () => void }) {
   const { t } = useI18n()
   const [mode, setMode] = useState<Mode>('signIn')
@@ -86,11 +86,13 @@ export function AccountForms({ onSignedIn }: { onSignedIn: () => void }) {
         text:
           msg === 'invalid_credentials'
             ? t('auth.invalidCredentials')
-            : msg === 'email_taken'
-              ? t('auth.emailTaken')
-              : msg === 'email_unconfirmed'
-                ? t('auth.checkEmail')
-                : t(`errors.${errorCode(err)}`),
+            : msg === 'invalid_code'
+              ? t('properties.claimInvalid')
+              : msg === 'email_taken'
+                ? t('auth.emailTaken')
+                : msg === 'email_unconfirmed'
+                  ? t('auth.checkEmail')
+                  : t(`errors.${errorCode(err)}`),
       })
     }
     setBusy(false)

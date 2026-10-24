@@ -10,24 +10,21 @@ import { useI18n } from '@/i18n'
 import { useAsync } from '@/lib/useAsync'
 import { emitChange } from '@/services/events'
 import { useStaff } from '@dash/auth/staff'
-import { errorMessage, q, requireDb, type UserRole } from '@dash/lib/supabase'
+import { listTeam, setRole as saveRole } from '@dash/lib/admin'
+import { errorMessage, type StaffRole } from '@dash/lib/firebase'
 
 /** Admin only: approve dashboard sign-ups and manage roles. */
 export function TeamPage() {
   const { profile } = useStaff()
   const { f } = useI18n()
   const toast = useToast()
-  const state = useAsync(
-    () => q(requireDb().from('profiles').select('id, full_name, email, role, created_at').neq('role', 'resident').order('created_at')),
-    [],
-    ['all'],
-  )
+  const state = useAsync(listTeam, [], ['all'])
   if (profile?.role !== 'admin') return <Navigate to="/" replace />
 
-  async function setRole(id: string, role: UserRole) {
+  async function setRole(id: string, role: StaffRole) {
     try {
-      await q(requireDb().rpc('set_staff_role', { p_profile: id, p_role: role }))
-      toast(role === 'pending_staff' ? 'Accès retiré' : 'Rôle mis à jour')
+      await saveRole(id, role)
+      toast(role === 'pending' ? 'Accès retiré' : 'Rôle mis à jour')
       emitChange('all')
     } catch (err) {
       toast(errorMessage(err), 'error')
@@ -39,8 +36,8 @@ export function TeamPage() {
       <PageHeader title="Équipe" subtitle="Validez les demandes d’accès et gérez les rôles" />
       <AsyncBoundary state={state}>
         {(people) => {
-          const pending = people.filter((p) => p.role === 'pending_staff')
-          const staff = people.filter((p) => p.role !== 'pending_staff')
+          const pending = people.filter((p) => p.role === 'pending')
+          const staff = people.filter((p) => p.role !== 'pending')
           return (
             <div className="space-y-6">
               <section aria-labelledby="pending">
@@ -50,7 +47,7 @@ export function TeamPage() {
                   {pending.map((p) => (
                     <div key={p.id} className="flex flex-wrap items-center gap-3 p-4">
                       <div className="min-w-0 flex-1">
-                        <p className="font-bold text-ink">{p.full_name || '—'}</p>
+                        <p className="font-bold text-ink">{p.fullName || '—'}</p>
                         <p className="text-sm text-muted">
                           {p.email} · demandé {f.relative(p.created_at)}
                         </p>
@@ -69,7 +66,7 @@ export function TeamPage() {
                     <div key={p.id} className="flex flex-wrap items-center gap-3 p-4">
                       <div className="min-w-0 flex-1">
                         <p className="flex items-center gap-2 font-bold text-ink">
-                          {p.full_name || '—'}
+                          {p.fullName || '—'}
                           {p.id === profile.id && <Badge tone="muted">Vous</Badge>}
                         </p>
                         <p className="text-sm text-muted">{p.email}</p>
@@ -83,7 +80,7 @@ export function TeamPage() {
                           <Button
                             size="sm"
                             variant="danger"
-                            onClick={() => window.confirm(`Retirer l’accès de ${p.full_name || p.email} ?`) && void setRole(p.id, 'pending_staff')}
+                            onClick={() => window.confirm(`Retirer l’accès de ${p.fullName || p.email} ?`) && void setRole(p.id, 'pending')}
                           >
                             Retirer l’accès
                           </Button>
