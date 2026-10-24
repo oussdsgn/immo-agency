@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">IMMO Agency</string>
+    <string name="title_activity_main">IMMO Agency</string>
+    <string name="package_name">com.immoagency.resident</string>
+    <string name="custom_url_scheme">com.immoagency.resident</string>
+</resources>
