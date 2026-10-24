@@ -38,7 +38,7 @@ export function SignInPage() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-canvas">
-      <div className="flex justify-end p-4">
+      <div className="flex justify-end p-4 pt-[max(1rem,env(safe-area-inset-top))]">
         <LanguageSwitch />
       </div>
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col px-6 pb-10">

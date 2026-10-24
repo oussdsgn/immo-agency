@@ -23,9 +23,29 @@ npm run dev        # http://localhost:5173
 | `npm run typecheck` | Vérification TypeScript |
 | `npm run lint` | ESLint |
 | `npm test` | Tests unitaires (Vitest) : domaine, i18n, couche de services simulée |
+| `npm run android:apk` | Build web + APK Android debug (voir plus bas) |
 | `npm run e2e` | Parcours de bout en bout (28 étapes, FR + AR) sur un serveur lancé. Nécessite Chromium : `CHROMIUM_PATH=/chemin/vers/chrome npm run e2e` |
 
 À l'ouverture, choisissez **« Continuer avec le compte de démonstration »**.
+
+## Application Android (APK)
+
+L'application Android est une coque native [Capacitor](https://capacitorjs.com) autour du même code web (`android/`, `capacitor.config.ts`). Identifiant : `com.immoagency.resident`. Android 7 (API 24) minimum.
+
+**Télécharger l'APK depuis GitHub**
+- À chaque push, le workflow **Android APK** (`.github/workflows/android-apk.yml`) lance les vérifications puis construit l'APK. Pour le récupérer : onglet *Actions* → exécution → artefact **IMMO-Agency-apk**.
+- Pour chaque tag `v*` (par exemple `v0.1.0`), l'APK est aussi joint à une *Release* GitHub.
+
+**Construire en local** (JDK 21 et Android SDK avec la plateforme 36 nécessaires) :
+
+```bash
+npm run android:apk
+# → android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+L'APK est une version **debug**, signée avec la clé de debug : pratique pour tester, mais pas pour le Play Store. Pour publier, il faut créer une clé de signature, la garder hors du dépôt (secret GitHub Actions) et construire une version *release* (`bundleRelease`).
+
+Icônes et écran de démarrage : générés à partir de `assets/` avec `npx capacitor-assets generate --android`.
 
 ## Fonctionnalités
 

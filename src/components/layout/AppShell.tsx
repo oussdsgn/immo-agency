@@ -77,7 +77,7 @@ export function AppShell() {
 
       <div className="min-w-0 flex-1">
         {/* Mobile top bar */}
-        <header className="sticky top-0 z-30 border-b border-line/70 bg-canvas/90 backdrop-blur-md lg:hidden">
+        <header className="sticky top-0 z-30 border-b border-line/70 bg-canvas/90 pt-[env(safe-area-inset-top)] backdrop-blur-md lg:hidden">
           <div className="mx-auto flex h-15 max-w-2xl items-center justify-between gap-3 px-4">
             <Link to="/" aria-label={t('nav.home')}>
               <Logo />
