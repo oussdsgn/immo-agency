@@ -2,6 +2,14 @@
 
 Application mobile-first pour les résidents des biens gérés par l'agence : consulter son logement, **signaler un problème** et suivre son traitement, recevoir les mises à jour de l'agence, découvrir des biens à acquérir. Interface en **français** (par défaut) et en **arabe** (RTL complet).
 
+## 📱 Télécharger l'application Android
+
+**[⬇️ Télécharger IMMO-Agency.apk](https://github.com/oussdsgn/immo-agency/releases/latest/download/IMMO-Agency.apk)** — ouvrez ce lien depuis votre téléphone Android (Android 7 ou plus récent).
+
+<img src="docs/download-qr.png" alt="QR code vers le téléchargement de l'APK" width="160" />
+
+Depuis un ordinateur, scannez ce QR code avec le téléphone. Android vous demandera peut-être d'autoriser l'installation d'applications inconnues pour votre navigateur. Le lien sert toujours la dernière version construite depuis `main` ([page de la release](https://github.com/oussdsgn/immo-agency/releases/latest)).
+
 > **Prototype frontend.** Toutes les données sont **fictives** et stockées dans le navigateur. Aucun signalement, message ou demande n'est transmis à une agence réelle. L'application le dit clairement partout où cela compte (confirmation, fiches, profil).
 
 Périmètre : seulement l'application résident. Le tableau de bord de l'agence existe déjà ; cette application est conçue pour s'y connecter plus tard via une API.
@@ -33,7 +41,8 @@ npm run dev        # http://localhost:5173
 L'application Android est une coque native [Capacitor](https://capacitorjs.com) autour du même code web (`android/`, `capacitor.config.ts`). Identifiant : `com.immoagency.resident`. Android 7 (API 24) minimum.
 
 **Télécharger l'APK depuis GitHub**
-- À chaque push, le workflow **Android APK** (`.github/workflows/android-apk.yml`) lance les vérifications puis construit l'APK. Pour le récupérer : onglet *Actions* → exécution → artefact **IMMO-Agency-apk**.
+- À chaque push sur `main`, le workflow **Android APK** (`.github/workflows/android-apk.yml`) lance les vérifications, construit l'APK et le publie dans la release **apk-latest**. C'est le lien de téléchargement direct en haut de ce fichier.
+- Pour les autres branches et les pull requests, l'APK est disponible en artefact (onglet *Actions* → exécution → **IMMO-Agency-apk**, connexion GitHub requise).
 - Pour chaque tag `v*` (par exemple `v0.1.0`), l'APK est aussi joint à une *Release* GitHub.
 
 **Construire en local** (JDK 21 et Android SDK avec la plateforme 36 nécessaires) :
