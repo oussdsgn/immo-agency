@@ -71,6 +71,10 @@ function ReportWizard({ properties, categories }: { properties: Property[]; cate
     } else if (properties.length === 1 && draft.propertyId !== properties[0].id) {
       prefill({ propertyId: properties[0].id })
     }
+    const fromCategory = params.get('categorie')
+    if (!draft.categoryId && categories.some((c) => c.id === fromCategory)) {
+      prefill({ categoryId: fromCategory as ReportCategory['id'] })
+    }
     // Only on mount: later changes are the resident's own choices.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

@@ -6,7 +6,8 @@
  */
 import { REPORT_CATEGORIES } from '@/data/categories'
 import { createSeed, type Dataset, type SeedData } from '@/data/seed'
-import { AGENCY_TRANSITIONS, canResidentReply } from '@/domain/reportWorkflow'
+import { hasErrors, validateFeedback } from '@/domain/reportValidation'
+import { AGENCY_TRANSITIONS, canResidentReply, needsFeedback } from '@/domain/reportWorkflow'
 import { uid } from '@/lib/id'
 import type {
   AppNotification,
@@ -21,12 +22,13 @@ import { ServiceError } from '../errors'
 import { emitChange, type DataTopic } from '../events'
 import type { KeyValueStore } from './storage'
 
-const DB_KEY = 'immo-agency.dev.db.v1'
+// Bump the version when the seed shape changes so devices reseed.
+const DB_KEY = 'immo-agency.dev.db.v2'
 const SESSION_KEY = 'immo-agency.dev.session.v1'
 const FAILURE_KEY = 'immo-agency.dev.failure.v1'
 
 interface Db extends SeedData {
-  version: 1
+  version: 2
   dataset: Dataset
   nextReferenceNumber: number
   interestRequests: { id: string; listingId: string; at: string }[]
@@ -46,7 +48,7 @@ export function createMockServices({ store, latency = [250, 650], now = Date.now
   let failureMode: FailureMode = (store.get(FAILURE_KEY) as FailureMode | null) ?? 'off'
 
   function fresh(dataset: Dataset): Db {
-    return { version: 1, dataset, nextReferenceNumber: 148, interestRequests: [], ...createSeed(dataset, now()) }
+    return { version: 2, dataset, nextReferenceNumber: 148, interestRequests: [], ...createSeed(dataset, now()) }
   }
 
   function load(): Db {
@@ -54,7 +56,7 @@ export function createMockServices({ store, latency = [250, 650], now = Date.now
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as Db
-        if (parsed.version === 1) return parsed
+        if (parsed.version === 2) return parsed
       } catch {
         // Corrupted dev data: start over.
       }
@@ -244,6 +246,31 @@ export function createMockServices({ store, latency = [250, 650], now = Date.now
           persist('reports')
           return report
         }),
+      submitFeedback: (reportId, input) =>
+        call('write', () => {
+          const report = findReport(reportId)
+          if (!needsFeedback(report) || hasErrors(validateFeedback(input))) throw new ServiceError('validation')
+          const at = new Date(now()).toISOString()
+          const comment = input.comment?.trim() || undefined
+          if (input.fixed) {
+            report.feedback = { fixed: true, rating: input.rating, comment, at }
+          } else {
+            // Simulates the agency reopening the report after the resident's answer.
+            report.status = 'in_progress'
+            report.history.push({ id: uid('evt'), status: 'in_progress', at, source: 'resident', note: 'timeline.notes.reopenedByResident' })
+            report.messages.push({
+              id: uid('msg'),
+              author: 'resident',
+              authorName: `${db.resident.firstName} ${db.resident.lastName}`,
+              body: comment ?? '',
+              at,
+              attachments: [],
+            })
+          }
+          report.updatedAt = at
+          persist('reports')
+          return report
+        }),
     },
 
     notifications: {
@@ -326,6 +353,8 @@ export function createMockServices({ store, latency = [250, 650], now = Date.now
         const at = new Date(now()).toISOString()
         report.status = status
         report.updatedAt = at
+        // A new resolution needs a new confirmation from the resident.
+        if (status !== 'closed') delete report.feedback
         report.history.push({ id: uid('evt'), status, at, source: 'agency', simulated: true })
         if (status === 'awaiting_resident' && withInfoRequest) {
           report.messages.push({

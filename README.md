@@ -66,6 +66,16 @@ Icônes et écran de démarrage : générés à partir de `assets/` avec `npx ca
   - Double envoi impossible ; en cas d'échec, les données sont conservées et un bouton « Réessayer » s'affiche.
 - **Signalements** : liste filtrable par statut et par bien (filtres conservés dans l'URL) ; détail avec référence, statut en lecture seule, historique chronologique, photos (visionneuse), échanges avec l'agence, réponse du résident avec photos.
 - **Statuts** : Soumis, En cours d'examen, En cours de traitement, Informations requises, Résolu, Clôturé, Refusé (`src/domain/reportWorkflow.ts`, à faire correspondre au workflow réel de l'agence).
+- **Confirmation de résolution** : quand l'agence passe un signalement à *Résolu*, le résident répond « Le problème est-il réglé ? ».
+  - Oui : il donne une note de 1 à 5 étoiles et un commentaire facultatif.
+  - Non : il explique ce qui ne va pas, et le signalement repasse *En cours de traitement*, avec l'explication dans l'historique et les échanges.
+  - L'accueil rappelle les résolutions en attente de confirmation.
+- **Urgences** (`/urgences`) : numéros nationaux à composer d'un geste, lignes d'astreinte et gardien de la résidence, premiers gestes (gaz, fuite d'eau, coupure, ascenseur) avec un lien vers un signalement pré-rempli.
+  - Accessible depuis l'accueil, le profil, la barre latérale et le choix « Urgent » du formulaire.
+  - Les numéros nationaux (14, 17, 1055, 3303) sont intégrés à l'application (`src/data/emergency.ts`). Faites-les vérifier par l'agence avant la mise en production.
+- **Présentation au premier lancement** (`/bienvenue`) : 4 écrans courts (bienvenue, signaler, suivre, rester informé).
+  - Navigation par balayage, flèches du clavier (inversées en arabe), points ou boutons ; bouton « Passer » ; sélecteur de langue.
+  - Elle s'affiche une fois par appareil et peut être revue depuis Profil → « Revoir la présentation ».
 - **Notifications** : signalement envoyé, changement de statut, demande d'informations, résolution, annonces. Chaque notification renvoie au signalement ou au bien concerné ; marquage lu et « tout marquer comme lu ».
 - **Acquérir** : annonces fictives (vente ou location, appartement ou maison), fiche détaillée, demande d'informations validée. Le prix est affiché seulement s'il existe, sinon « Prix sur demande ». États de chargement, liste vide et erreur.
 - **Profil** : compte de démonstration clairement indiqué, coordonnées, langue, préférences de notification, confidentialité, page « À propos » (ce qui est simulé), déconnexion.

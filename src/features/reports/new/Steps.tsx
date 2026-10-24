@@ -1,4 +1,5 @@
-import { CircleAlert, Info, Pencil } from 'lucide-react'
+import { CircleAlert, Info, Pencil, Siren } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { BuildingIllustration } from '@/components/ui/BuildingIllustration'
 import { Card } from '@/components/ui/Card'
@@ -184,6 +185,15 @@ export function StepDetails({ draft, update, errors }: StepProps) {
           <Info className="mt-px size-4 shrink-0 text-muted" aria-hidden />
           {t('urgency.disclaimer')}
         </p>
+        {draft.urgency === 'urgent' && (
+          <Link
+            to="/urgences"
+            className="mt-2 flex min-h-11 items-center gap-2 rounded-control border border-danger-ink/25 bg-danger-soft px-3 text-sm font-semibold text-danger-ink hover:border-danger-ink/50"
+          >
+            <Siren className="size-4 shrink-0" aria-hidden />
+            {t('emergency.fromUrgent')}
+          </Link>
+        )}
       </fieldset>
     </div>
   )

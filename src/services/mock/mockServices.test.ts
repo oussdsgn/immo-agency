@@ -98,4 +98,28 @@ describe('mock services', () => {
     expect(await s.reports.listReports()).toEqual([])
     expect(await s.notifications.listNotifications()).toEqual([])
   })
+
+  it('records a rating when the resident confirms the fix', async () => {
+    // seed report rep-0128 is resolved and awaiting confirmation
+    const r = await s.reports.submitFeedback('rep-0128', { fixed: true, rating: 4, comment: 'Rapide' })
+    expect(r.status).toBe('resolved')
+    expect(r.feedback).toMatchObject({ fixed: true, rating: 4, comment: 'Rapide' })
+    await expect(s.reports.submitFeedback('rep-0128', { fixed: true, rating: 5 })).rejects.toMatchObject({ code: 'validation' })
+  })
+
+  it('reopens the report when the problem persists, and asks again after a new resolution', async () => {
+    const r = await s.reports.submitFeedback('rep-0128', { fixed: false, comment: 'Toujours bloqué au 3e' })
+    expect(r.status).toBe('in_progress')
+    expect(r.feedback).toBeUndefined()
+    expect(r.history.at(-1)).toMatchObject({ status: 'in_progress', source: 'resident' })
+    expect(r.messages.at(-1)).toMatchObject({ author: 'resident', body: 'Toujours bloqué au 3e' })
+    const again = await s.dev!.simulateAgencyStatus(r.id, 'resolved')
+    expect(again.status).toBe('resolved')
+    expect(again.feedback).toBeUndefined()
+  })
+
+  it('rejects invalid feedback', async () => {
+    await expect(s.reports.submitFeedback('rep-0128', { fixed: true })).rejects.toMatchObject({ code: 'validation' })
+    await expect(s.reports.submitFeedback('rep-0147', { fixed: true, rating: 3 })).rejects.toMatchObject({ code: 'validation' })
+  })
 })

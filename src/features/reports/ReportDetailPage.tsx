@@ -15,6 +15,7 @@ import { services } from '@/services'
 import { AgencySimulator } from './AgencySimulator'
 import { Conversation, ReplyComposer } from './Conversation'
 import { PhotoGallery } from './PhotoGallery'
+import { ResolutionFeedback } from './ResolutionFeedback'
 import { Timeline } from './Timeline'
 
 export function ReportDetailPage() {
@@ -93,6 +94,8 @@ export function ReportDetailPage() {
                 </div>
               </div>
             )}
+
+            <ResolutionFeedback report={report} />
 
             <section aria-labelledby="desc">
               <SectionHeading id="desc" title={t('reportDetail.description')} />

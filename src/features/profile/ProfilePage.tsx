@@ -1,4 +1,4 @@
-import { Building2, FlaskConical, Info, LogOut, Mail, Phone, ShieldCheck, UserRound } from 'lucide-react'
+import { Building2, FlaskConical, Info, LogOut, Mail, Phone, PlayCircle, ShieldCheck, Siren, UserRound } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { DevBadge } from '@/components/ui/Badge'
@@ -125,6 +125,8 @@ export function ProfilePage() {
               </section>
 
               <Card className="divide-y divide-line overflow-hidden">
+                <ListRow icon={<Siren />} label={t('nav.emergency')} to="/urgences" />
+                <ListRow icon={<PlayCircle />} label={t('profile.replayOnboarding')} onClick={() => navigate('/bienvenue', { state: { returnTo: '/profil' } })} />
                 <ListRow icon={<Info />} label={t('profile.about')} to="/a-propos" />
                 {services.dev && <ListRow icon={<FlaskConical />} label={t('profile.devTools')} to="/dev" />}
                 <ListRow icon={<LogOut className="flip-rtl" />} label={t('profile.signOut')} tone="danger" onClick={() => setConfirmOut(true)} />

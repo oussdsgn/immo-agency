@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
+import { hasSeenOnboarding } from '@/features/onboarding/onboardingState'
 import { onChange, services } from '@/services'
 import type { Session } from '@/types'
 
@@ -47,6 +48,10 @@ export function RequireSession({ children }: { children: ReactNode }) {
   const { session, ready } = useSession()
   const location = useLocation()
   if (!ready) return null
-  if (!session) return <Navigate to="/connexion" replace state={{ from: location.pathname + location.search }} />
+  if (!session) {
+    // First launch on this device: show the short intro before signing in.
+    const to = hasSeenOnboarding() ? '/connexion' : '/bienvenue'
+    return <Navigate to={to} replace state={{ from: location.pathname + location.search }} />
+  }
   return <>{children}</>
 }

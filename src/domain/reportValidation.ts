@@ -1,4 +1,4 @@
-import type { LocationInProperty, ReportCategoryId, Urgency } from '@/types'
+import type { LocationInProperty, ReportCategoryId, ResolutionFeedbackInput, Urgency } from '@/types'
 
 export const TITLE_MIN = 5
 export const TITLE_MAX = 80
@@ -56,7 +56,7 @@ export function validateDraft(d: ReportDraft): DraftErrors {
   return { ...validatePropertyStep(d), ...validateCategoryStep(d), ...validateDetailsStep(d) }
 }
 
-export function hasErrors(e: DraftErrors): boolean {
+export function hasErrors(e: object): boolean {
   return Object.keys(e).length > 0
 }
 
@@ -69,4 +69,22 @@ export function isValidPhone(v: string): boolean {
 
 export function isValidEmail(v: string): boolean {
   return EMAIL_RE.test(v.trim())
+}
+
+export const FEEDBACK_COMMENT_MIN = 5
+export const FEEDBACK_COMMENT_MAX = 500
+
+/** Values are i18n keys under `validation.*`. */
+export type FeedbackErrors = Partial<Record<'rating' | 'comment', string>>
+
+export function validateFeedback(f: Partial<ResolutionFeedbackInput> & { fixed: boolean }): FeedbackErrors {
+  const errors: FeedbackErrors = {}
+  const comment = f.comment?.trim() ?? ''
+  if (f.fixed) {
+    if (!f.rating || f.rating < 1 || f.rating > 5) errors.rating = 'validation.ratingRequired'
+  } else if (comment.length < FEEDBACK_COMMENT_MIN) {
+    errors.comment = 'validation.stillBrokenRequired'
+  }
+  if (comment.length > FEEDBACK_COMMENT_MAX) errors.comment = 'validation.commentTooLong'
+  return errors
 }

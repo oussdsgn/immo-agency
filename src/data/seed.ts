@@ -78,7 +78,13 @@ export function createSeed(dataset: Dataset, now = Date.now()): SeedData {
       rooms: 3,
       role: 'tenant',
       visual: { palette: 'sand', floors: 5, style: 'block' },
-      residenceContact: { phone: '+213 21 00 00 00', email: 'contact@example.com', manager: AGENCY },
+      residenceContact: {
+        phone: '+213 21 00 00 00',
+        email: 'contact@example.com',
+        manager: AGENCY,
+        emergencyPhone: '+213 21 00 00 99',
+        guardPhone: '+213 5 00 00 00 10',
+      },
       amenities: ['elevator', 'parking', 'concierge', 'security'],
     },
     {
@@ -93,7 +99,12 @@ export function createSeed(dataset: Dataset, now = Date.now()): SeedData {
       rooms: 4,
       role: 'owner',
       visual: { palette: 'olive', floors: 3, style: 'terrace' },
-      residenceContact: { phone: '+213 41 00 00 01', email: 'jardins@example.com', manager: AGENCY },
+      residenceContact: {
+        phone: '+213 41 00 00 01',
+        email: 'jardins@example.com',
+        manager: AGENCY,
+        emergencyPhone: '+213 41 00 00 99',
+      },
       amenities: ['garden', 'parking', 'pool'],
     },
   ]

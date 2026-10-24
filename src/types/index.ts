@@ -43,7 +43,15 @@ export interface Property {
   rooms?: number
   role: OccupancyRole
   visual: BuildingVisual
-  residenceContact?: { phone?: string; email?: string; manager?: string }
+  residenceContact?: {
+    phone?: string
+    email?: string
+    manager?: string
+    /** Agency on-call line outside office hours. */
+    emergencyPhone?: string
+    /** Residence guard / concierge desk. */
+    guardPhone?: string
+  }
   amenities?: AmenityKey[]
 }
 
@@ -142,7 +150,21 @@ export interface Report {
   messages: ReportMessage[]
   /** True for reports created on this device through the prototype. */
   createdLocally?: boolean
+  /** Resident's answer once the agency marks the report as resolved. */
+  feedback?: ResolutionFeedback
 }
+
+export type Rating = 1 | 2 | 3 | 4 | 5
+
+export interface ResolutionFeedback {
+  fixed: boolean
+  /** Only when fixed. */
+  rating?: Rating
+  comment?: string
+  at: ISODate
+}
+
+export type ResolutionFeedbackInput = Omit<ResolutionFeedback, 'at'>
 
 export interface NewReportInput {
   propertyId: string
