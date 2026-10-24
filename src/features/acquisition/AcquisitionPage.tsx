@@ -7,7 +7,7 @@ import { AsyncBoundary, EmptyState, Skeleton } from '@/components/ui/States'
 import { useI18n } from '@/i18n'
 import { cn } from '@/lib/cn'
 import { useAsync } from '@/lib/useAsync'
-import { services } from '@/services'
+import { IS_MOCK_DATA, services } from '@/services'
 import type { ListingKind, ListingTransaction } from '@/types'
 import { ListingCard } from './ListingCard'
 
@@ -39,10 +39,12 @@ export function AcquisitionPage() {
   return (
     <>
       <PageHeader title={t('acquire.title')} subtitle={t('acquire.subtitle')} back="/" />
-      <p className="mb-4 flex items-start gap-2 rounded-control bg-dev-soft p-3 text-xs font-medium text-dev">
-        <FlaskConical className="mt-px size-4 shrink-0" aria-hidden />
-        {t('acquire.devNotice')}
-      </p>
+      {IS_MOCK_DATA && (
+        <p className="mb-4 flex items-start gap-2 rounded-control bg-dev-soft p-3 text-xs font-medium text-dev">
+          <FlaskConical className="mt-px size-4 shrink-0" aria-hidden />
+          {t('acquire.devNotice')}
+        </p>
+      )}
       <div className="mb-5 space-y-3">
         <Segmented<TxFilter>
           label={t('acquire.transactionLabel')}

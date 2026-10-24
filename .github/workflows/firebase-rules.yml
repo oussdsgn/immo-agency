@@ -1,0 +1,28 @@
+# Firestore security rules tests (47 checks) on the Firebase emulator:
+# residents only see their own unit, the report workflow can't be bypassed,
+# staff roles can't be self-granted, etc.
+name: Firebase rules
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - name: Run rules tests on the emulator
+        run: npm run test:rules

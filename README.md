@@ -10,9 +10,19 @@ Application mobile-first pour les résidents des biens gérés par l'agence : co
 
 Depuis un ordinateur, scannez ce QR code avec le téléphone. Android vous demandera peut-être d'autoriser l'installation d'applications inconnues pour votre navigateur. Le lien sert toujours la dernière version construite depuis `main` ([page de la release](https://github.com/oussdsgn/immo-agency/releases/latest)).
 
-> **Prototype frontend.** Toutes les données sont **fictives** et stockées dans le navigateur. Aucun signalement, message ou demande n'est transmis à une agence réelle. L'application le dit clairement partout où cela compte (confirmation, fiches, profil).
+## Deux applications, un serveur
 
-Périmètre : seulement l'application résident. Le tableau de bord de l'agence existe déjà ; cette application est conçue pour s'y connecter plus tard via une API.
+| | Pour qui | Où |
+| --- | --- | --- |
+| **Application résident** (`src/`) | Résidents : signaler, suivre, échanger, annonces, urgences | APK Android, ou web |
+| **Tableau de bord agence** (`dashboard/`) | Équipe de l'agence : alertes en direct, traitement, planification des techniciens, immeubles et codes logement, annonces | Navigateur : `https://<compte>.github.io/immo-agency/` |
+| **Backend Firebase** (`firebase/`) | Comptes (Authentication), données, photos et temps réel (Firestore), règles d'accès | Projet Firebase `immo-agency-53c66` (offre gratuite Spark) |
+
+👉 **Mise en service :** suivez [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md), environ 10 minutes.
+
+**Modes de l'application résident** (variable `VITE_DATA_SOURCE` au build)
+- **Connectée** (`firebase`, par défaut pour les builds et l'APK) : les comptes sont réels, les données partagées avec le tableau de bord et les mises à jour arrivent en direct.
+- **Démonstration** (`mock`, par défaut pour `npm run dev`) : les données sont fictives et stockées sur l'appareil, et un simulateur imite les réponses de l'agence. Rien n'est transmis.
 
 ## Démarrage
 
@@ -32,6 +42,8 @@ npm run dev        # http://localhost:5173
 | `npm run lint` | ESLint |
 | `npm test` | Tests unitaires (Vitest) : domaine, i18n, couche de services simulée |
 | `npm run android:apk` | Build web + APK Android debug (voir plus bas) |
+| `npm run test:rules` | Tests des règles de sécurité Firestore sur l'émulateur (47 vérifications ; Java 21 requis) |
+| `npm run emulators` | Émulateurs Firebase locaux (Auth + Firestore) |
 | `npm run e2e` | Parcours de bout en bout (28 étapes, FR + AR) sur un serveur lancé. Nécessite Chromium : `CHROMIUM_PATH=/chemin/vers/chrome npm run e2e` |
 
 À l'ouverture, choisissez **« Continuer avec le compte de démonstration »**.
@@ -110,34 +122,47 @@ src/
 
 Stack : React 19, TypeScript, Vite, Tailwind CSS v4, React Router, Lucide. La validation est écrite à la main (aucune bibliothèque de formulaires nécessaire).
 
-L'interface ne dépend que de `services` (`src/services/index.ts`), qui expose l'interface `Services` de `contracts.ts`. Seule l'implémentation simulée existe aujourd'hui (latence, persistance en localStorage, pannes optionnelles).
+L'interface ne dépend que de `services` (`src/services/index.ts`), qui expose l'interface `Services` de `contracts.ts`. Deux implémentations : `mock/` (latence, persistance en localStorage, pannes optionnelles) et `firebase/` (Firebase Auth + Firestore). Les écritures Firestore partagées par l'app, le tableau de bord et les tests sont dans `src/services/firebase/ops.ts`.
 
-## Simulé ou à construire
+## Tableau de bord agence
 
-| Domaine | Aujourd'hui (prototype) | À prévoir pour la production |
-| --- | --- | --- |
-| Authentification | Compte de démonstration, sans mot de passe | Fournisseur d'identité de l'agence, session httpOnly ou jetons courts, gestion de l'expiration |
-| Biens et résident | Données fictives locales | API de gestion de l'agence |
-| Signalements et historique | Stockés dans localStorage | API ; références attribuées par le serveur |
-| Photos | Redimensionnées et stockées en data URL | Envoi vers un stockage objet via URL pré-signée, contrôle antivirus et du type |
-| Mises à jour de l'agence | Simulateur de développement | Événements du backend de l'agence |
-| Notifications | Liste locale | Push (Web Push ou FCM / APNs) et flux temps réel ; les préférences sont prêtes |
-| Annonces « Acquérir » | Fictives, demandes non transmises | Flux d'annonces et CRM de l'agence |
+- **Alertes en direct** : nouveau signalement, réponse d'un résident, problème toujours présent, nouvel avis. Chacune s'affiche en notification sur l'écran avec un lien « Ouvrir » et un son (double bip si urgent, désactivable). Si le navigateur l'autorise, une notification apparaît aussi quand l'onglet est en arrière-plan.
+- **Signalements** : boîte de réception filtrable (statut, urgence, résidence, technicien, recherche).
+  - La fiche montre les photos, les coordonnées du résident, l'historique et les échanges.
+  - Les actions de statut sont limitées aux étapes que le workflow autorise.
+- **Interventions** : file « à planifier » et planning par technicien, avec les retards signalés. La planification (technicien, date et heure, note) notifie le résident ; le technicien et le rendez-vous apparaissent dans son application.
+- **Demandes d'informations** : la question passe le signalement en « Informations requises » et le résident est notifié.
+- **Immeubles** : résidences (contacts et numéros d'astreinte affichés dans l'écran Urgences de l'app), bâtiments et logements.
+  - Chaque logement a un **code d'accès**, avec copie d'une invitation prête à envoyer et régénération.
+  - On y voit les occupants rattachés, et on peut leur retirer l'accès.
+- **Techniciens**, **Annonces** (français et arabe, notifiées aux résidents de la résidence), **Demandes d'achat ou de location**.
+- **Équipe** (administrateurs) : validation des demandes d'accès et gestion des rôles.
+
+## Backend et sécurité
+
+- **Règles Firestore** (`firebase/firestore.rules`) : un résident ne voit que ses logements, leurs signalements, sa résidence et ses annonces. Un code logement ne se lit qu'un par un (pour vérifier un code), jamais en liste.
+- **Workflow imposé par les règles** :
+  - seules les transitions de statut autorisées passent ;
+  - chaque changement de statut ou planification doit écrire son entrée d'historique dans le même lot ;
+  - un résident ne peut que déposer, répondre, confirmer (note de 1 à 5, une seule fois) ou signaler que le problème persiste.
+- **Identité vérifiée** : l'auteur des messages, des photos et des événements doit être l'utilisateur connecté, et les dates sont celles du serveur. La référence `SR-AAAA-NNNN` vient d'un compteur incrémenté dans la même transaction.
+- **Photos** : compressées dans l'app et stockées dans Firestore (moins de 900 Ko, images uniquement), lisibles par l'agence et les occupants du logement seulement. Pas besoin de Cloud Storage ni de l'offre payante.
+- **Comptes** : les comptes agence restent « en attente » jusqu'à validation par un administrateur. Le premier administrateur se désigne une seule fois.
+- **Tests** : `npm run test:rules` (47 vérifications, également exécutées en CI) et `scripts/e2e-connected.mjs` (14 étapes croisées application ⇄ tableau de bord sur les émulateurs).
 
 ### Sécurité
 
-- Aucun secret dans le client. Ne jamais placer de clé d'API dans une variable `VITE_*`, car elles sont intégrées au bundle.
-- localStorage **n'est pas** un stockage sûr : il ne sert qu'aux données fictives. Le prototype ne conserve pas les coordonnées saisies dans les demandes d'acquisition.
-- La garde de routes côté client sert uniquement l'expérience utilisateur. Le backend devra vérifier à chaque requête que le résident n'accède qu'à ses propres biens et signalements. Le mock imite déjà ce contrôle.
-- Les champs sont validés côté client ; le serveur devra refaire cette validation.
+- Seule la configuration web **publique** de Firebase est intégrée aux applications (`src/config/firebase.ts`) : c'est prévu ainsi par Firebase, les règles protègent les données. Aucune clé de compte de service ne doit s'y trouver.
+- En mode démonstration, localStorage ne sert qu'aux données fictives. En mode connecté, la session est gérée par Firebase Authentication.
+- Les gardes de routes côté client ne servent qu'à l'expérience utilisateur : chaque lecture et écriture est vérifiée par les règles.
+- Les champs sont validés côté client **et** par les règles (longueurs, valeurs autorisées).
 - Les erreurs réseau, de session expirée (`unauthorized`) et de stockage plein sont gérées et affichées. Une panne réseau ne déconnecte pas le résident.
 
 ## Prochaines étapes recommandées
 
-1. Obtenir le contrat d'API de l'agence et écrire `src/services/http/`, qui implémente `Services`, sélectionné par `VITE_DATA_SOURCE`.
-2. Brancher l'authentification réelle des résidents et retirer le compte de démonstration.
-3. Faire correspondre les catégories (`agencyCode`) et les statuts au workflow réel de l'agence.
-4. Envoyer les photos vers un stockage objet ; ajouter un mode hors ligne ou une file d'envoi.
-5. Ajouter les notifications push, un service worker et l'installation PWA (le manifeste est déjà là).
-6. Faire relire les traductions arabes par un locuteur natif, puis tester sur de vrais appareils (iOS Safari, Android Chrome) et avec des lecteurs d'écran.
-7. Remplacer les illustrations générées par les photos des biens fournies par l'agence.
+1. Faire la mise en service ([docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md)) et lancer un pilote sur une résidence.
+2. Personnaliser l'e-mail de réinitialisation du mot de passe (Authentication → Modèles).
+3. Ajouter les notifications push sur téléphone (Firebase Cloud Messaging). Les préférences de notification sont déjà en place.
+4. Signer une version *release* de l'APK pour le Play Store, avec une clé conservée en secret GitHub.
+5. Ajouter la photo d'intervention côté agence, et l'export des signalements (CSV) pour le reporting.
+6. Faire relire les traductions arabes et proposer le tableau de bord en arabe.

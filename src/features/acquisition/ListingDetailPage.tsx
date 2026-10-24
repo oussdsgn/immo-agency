@@ -13,7 +13,7 @@ import { InlineAlert } from '@/features/reports/new/Steps'
 import { useI18n, type TKey } from '@/i18n'
 import { cn } from '@/lib/cn'
 import { useAsync } from '@/lib/useAsync'
-import { errorCode, services } from '@/services'
+import { errorCode, IS_MOCK_DATA, services } from '@/services'
 import type { Listing } from '@/types'
 import { usePriceLabel } from './usePriceLabel'
 
@@ -32,9 +32,11 @@ export function ListingDetailPage() {
             <Card className="overflow-hidden">
               <div className="relative aspect-[16/9] bg-sunken sm:aspect-[16/7]">
                 <BuildingIllustration visual={l.visual} label={l.title[locale]} />
-                <Badge tone="dev" className="absolute end-3 top-3">
-                  {t('common.fictionalData')}
-                </Badge>
+                {IS_MOCK_DATA && (
+                  <Badge tone="dev" className="absolute end-3 top-3">
+                    {t('common.fictionalData')}
+                  </Badge>
+                )}
               </div>
               <div className="p-4 sm:p-5">
                 <Badge tone="brand">{t(`acquire.filters.${l.transaction}`)}</Badge>
@@ -140,7 +142,7 @@ function InterestForm({ listing }: { listing: Listing }) {
       <Card className="flex flex-col items-center p-6 text-center" role="status">
         <CircleCheck className="size-10 text-success-ink" aria-hidden />
         <h2 className="mt-3 text-base font-bold text-ink">{t('acquire.form.successTitle')}</h2>
-        <p className="mt-1.5 max-w-sm text-sm text-muted">{t('acquire.form.successBody')}</p>
+        <p className="mt-1.5 max-w-sm text-sm text-muted">{IS_MOCK_DATA ? t('acquire.form.successBody') : t('acquire.form.successBodyLive')}</p>
       </Card>
     )
 

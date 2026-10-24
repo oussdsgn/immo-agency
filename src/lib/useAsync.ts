@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DependencyList } from 'react'
-import { onChange } from '@/services'
+import { onChange } from '@/services/events'
 import type { DataTopic } from '@/services/events'
 
 export interface AsyncState<T> {

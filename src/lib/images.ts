@@ -14,10 +14,13 @@ const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/
 export const PHOTO_ACCEPT = ACCEPTED.join(',')
 
 /**
- * Validates and downsizes a photo to a JPEG data URL (max 1280px) so it fits
- * in development storage. In production, upload the original file to the
- * agency's storage via a pre-signed URL instead.
+ * Validates and downsizes a photo to a JPEG data URL (max 1280px). The data
+ * URL is what gets stored (localStorage in demo mode, a Firestore document
+ * when connected), so it is kept under MAX_DATA_URL_CHARS.
  */
+/** Below the 900 000 characters accepted by firebase/firestore.rules. */
+const MAX_DATA_URL_CHARS = 850_000
+
 export async function preparePhoto(file: File, maxSide = 1280, quality = 0.72): Promise<PreparedPhoto> {
   if (!file.type.startsWith('image/')) throw new PhotoPrepError('validation.photoInvalid')
   if (file.size > MAX_PHOTO_INPUT_BYTES) throw new PhotoPrepError('validation.photoTooLarge')
@@ -36,7 +39,10 @@ export async function preparePhoto(file: File, maxSide = 1280, quality = 0.72): 
   if (!ctx) throw new PhotoPrepError('validation.photoInvalid')
   ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
   bitmap.close()
-  const url = canvas.toDataURL('image/jpeg', quality)
+  let url = canvas.toDataURL('image/jpeg', quality)
+  // Very detailed photos: lower the quality until it fits a Firestore document.
+  for (let q = quality - 0.15; url.length > MAX_DATA_URL_CHARS && q > 0.2; q -= 0.15) url = canvas.toDataURL('image/jpeg', q)
+  if (url.length > MAX_DATA_URL_CHARS) throw new PhotoPrepError('validation.photoTooLarge')
   return { id: uid('att'), url, name: file.name, sizeBytes: Math.round((url.length * 3) / 4) }
 }
 

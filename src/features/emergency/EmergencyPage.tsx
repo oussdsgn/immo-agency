@@ -5,7 +5,7 @@ import { PageHeader, SectionHeading } from '@/components/ui/PageHeader'
 import { EMERGENCY_NUMBERS, SAFETY_TIPS, type EmergencyNumber } from '@/data/emergency'
 import { useI18n } from '@/i18n'
 import { useAsync } from '@/lib/useAsync'
-import { services } from '@/services'
+import { IS_MOCK_DATA, services } from '@/services'
 import type { Property } from '@/types'
 
 const ICONS: Record<EmergencyNumber['icon'], LucideIcon> = { flame: Flame, shield: ShieldAlert, badge: BadgeAlert, zap: Zap }
@@ -139,7 +139,7 @@ function ResidenceContacts({ property }: { property: Property }) {
           </li>
         ))}
       </ul>
-      <p className="px-4 pt-1 pb-3 text-xs text-muted">{t('common.fictionalData')}</p>
+      {IS_MOCK_DATA && <p className="px-4 pt-1 pb-3 text-xs text-muted">{t('common.fictionalData')}</p>}
     </Card>
   )
 }

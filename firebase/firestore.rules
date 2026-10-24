@@ -1,0 +1,270 @@
+rules_version = '2';
+
+// IMMO Agency — Firestore security rules (free Spark plan, no Cloud Functions).
+//
+// Security model
+//  * Residents only see the units they joined with an agency access code, and
+//    those units' reports, residence and announcements.
+//  * Staff (staff/{uid}.role agent|admin) see and manage everything. Dashboard
+//    sign-ups are `pending` until an admin approves them; the very first admin
+//    bootstraps once via config/bootstrap.
+//  * Report workflow is enforced here: allowed status transitions only, every
+//    status change / dispatch must write its timeline event in the same batch
+//    (report.lastEventId), residents can only file, reply, confirm or reopen.
+//  * Authorship fields (residentId, authorId, actorId, addedBy) must match the
+//    signed-in user; timestamps must be the server time.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------------------------------------- helpers
+    function signedIn() { return request.auth != null; }
+    function me() { return request.auth.uid; }
+    function staffPath() { return /databases/$(database)/documents/staff/$(me()); }
+    function role() { return get(staffPath()).data.role; }
+    function isStaff() { return signedIn() && exists(staffPath()) && role() in ['agent', 'admin']; }
+    function isAdmin() { return signedIn() && exists(staffPath()) && role() == 'admin'; }
+    function isMember(unitId) {
+      return signedIn() && unitId is string
+        && exists(/databases/$(database)/documents/memberships/$(me() + '_' + unitId));
+    }
+    function inResidence(residenceId) {
+      return signedIn() && residenceId is string
+        && exists(/databases/$(database)/documents/residenceMembers/$(residenceId + '_' + me()));
+    }
+
+    function d() { return request.resource.data; }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function onlyChanged(keys) { return changed().hasOnly(keys); }
+    function text(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
+    function optText(v, max) { return v == null || (v is string && v.size() <= max); }
+
+    function isOpen(s) { return s in ['submitted', 'under_review', 'in_progress', 'awaiting_resident']; }
+    // Mirrors AGENCY_TRANSITIONS in src/domain/reportWorkflow.ts.
+    function canMove(from, to) {
+      return (from == 'submitted' && to in ['under_review', 'in_progress', 'rejected'])
+        || (from == 'under_review' && to in ['in_progress', 'awaiting_resident', 'rejected'])
+        || (from == 'in_progress' && to in ['resolved', 'awaiting_resident'])
+        || (from == 'awaiting_resident' && to in ['in_progress', 'closed'])
+        || (from == 'resolved' && to in ['closed', 'in_progress']);
+    }
+    function reportPath(rid) { return /databases/$(database)/documents/reports/$(rid); }
+
+    // ------------------------------------------------------------ people
+    match /staff/{uid} {
+      allow read: if signedIn() && (uid == me() || isStaff());
+      // Anyone may ask for access; nobody can grant it to themselves…
+      allow create: if signedIn() && uid == me()
+        && d().keys().hasOnly(['role', 'fullName', 'email', 'createdAt'])
+        && d().role == 'pending' && text(d().fullName, 1, 120) && d().createdAt == request.time;
+      allow update: if
+        // …except an admin changing someone else's role,
+        (isAdmin() && uid != me() && onlyChanged(['role']) && d().role in ['pending', 'agent', 'admin'])
+        // or the one-time bootstrap of the first admin (config/bootstrap created in the same batch).
+        || (signedIn() && uid == me() && resource.data.role == 'pending' && onlyChanged(['role']) && d().role == 'admin'
+            && !exists(/databases/$(database)/documents/config/bootstrap)
+            && getAfter(/databases/$(database)/documents/config/bootstrap).data.adminUid == me());
+    }
+
+    match /config/bootstrap {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.keys().hasOnly(['adminUid', 'at'])
+        && request.resource.data.adminUid == me() && request.resource.data.at == request.time
+        && getAfter(staffPath()).data.role == 'admin';
+    }
+
+    match /residents/{uid} {
+      allow read: if signedIn() && (uid == me() || isStaff());
+      allow create: if signedIn() && uid == me()
+        && d().keys().hasOnly(['fullName', 'email', 'phone', 'prefs', 'createdAt'])
+        && text(d().fullName, 1, 120) && optText(d().phone, 30) && d().createdAt == request.time;
+      allow update: if signedIn() && uid == me() && onlyChanged(['fullName', 'phone', 'prefs'])
+        && text(d().fullName, 1, 120) && optText(d().phone, 30);
+    }
+
+    // ------------------------------------------------------------ real estate
+    match /residences/{rid} {
+      allow read: if isStaff() || inResidence(rid);
+      allow write: if isStaff();
+    }
+
+    match /buildings/{bid} {
+      allow read: if isStaff() || inResidence(resource.data.residenceId);
+      allow write: if isStaff();
+    }
+
+    match /units/{unitId} {
+      allow read: if isStaff() || isMember(unitId);
+      allow write: if isStaff();
+    }
+
+    // Access code → unit. Readable one code at a time (8 random characters,
+    // ~10^12 possibilities) so residents can check a code before signing up;
+    // never listable except by staff.
+    match /unitCodes/{code} {
+      allow get: if true;
+      allow list, write: if isStaff();
+    }
+
+    match /memberships/{mid} {
+      allow read: if signedIn() && (resource.data.uid == me() || isStaff());
+      allow create: if isStaff() || (
+        signedIn()
+        && d().keys().hasOnly(['uid', 'unitId', 'residenceId', 'code', 'occupancy', 'fullName', 'email', 'phone', 'createdAt'])
+        && d().uid == me() && mid == me() + '_' + d().unitId
+        && d().occupancy in ['owner', 'tenant'] && d().createdAt == request.time
+        && get(/databases/$(database)/documents/unitCodes/$(d().code)).data.unitId == d().unitId
+        && get(/databases/$(database)/documents/unitCodes/$(d().code)).data.residenceId == d().residenceId);
+      allow delete: if isStaff() || (signedIn() && resource.data.uid == me());
+    }
+
+    match /residenceMembers/{id} {
+      allow read: if signedIn() && (resource.data.uid == me() || isStaff());
+      allow create: if isStaff() || (
+        signedIn() && d().keys().hasOnly(['uid', 'residenceId', 'unitId'])
+        && d().uid == me() && id == d().residenceId + '_' + me()
+        && getAfter(/databases/$(database)/documents/memberships/$(me() + '_' + d().unitId)).data.residenceId == d().residenceId);
+      allow delete: if isStaff() || (signedIn() && resource.data.uid == me());
+    }
+
+    match /technicians/{tid} {
+      allow read, write: if isStaff();
+    }
+
+    // ------------------------------------------------------------ reports
+    match /counters/reports {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.keys().hasOnly(['next']) && request.resource.data.next == 2;
+      allow update: if signedIn() && request.resource.data.keys().hasOnly(['next'])
+        && request.resource.data.next == resource.data.next + 1;
+    }
+
+    match /reports/{rid} {
+      // `resource == null`: checking whether a (client-generated) id already
+      // exists, so a retried submission is never filed twice.
+      allow get: if resource == null || isStaff() || isMember(resource.data.unitId);
+      allow list: if isStaff() || isMember(resource.data.unitId);
+
+      // Residents file a fresh, unassigned report on their own unit, together
+      // with the counter increment and the "submitted" timeline event.
+      allow create: if isMember(d().unitId)
+        && d().keys().hasOnly(['number', 'unitId', 'residenceId', 'unitLabel', 'residentId', 'residentName', 'residentPhone',
+          'residentEmail', 'category', 'title', 'description', 'location', 'urgency', 'status', 'assigneeId', 'assigneeName',
+          'scheduledAt', 'feedback', 'lastEventId', 'residentActivity', 'createdAt', 'updatedAt'])
+        && d().residentId == me() && d().status == 'submitted'
+        && d().assigneeId == null && d().assigneeName == null && d().scheduledAt == null && d().feedback == null
+        && d().residentActivity == null
+        && d().createdAt == request.time && d().updatedAt == request.time
+        && d().category in ['plumbing', 'water_leak', 'electricity', 'hvac', 'doors_windows', 'common_areas', 'structural', 'cleaning', 'other']
+        && d().location in ['kitchen', 'bathroom', 'bedroom', 'living_room', 'balcony', 'entrance', 'common_area', 'parking', 'other']
+        && d().urgency in ['low', 'normal', 'urgent']
+        && text(d().title, 5, 80) && text(d().description, 15, 1000)
+        && get(/databases/$(database)/documents/units/$(d().unitId)).data.residenceId == d().residenceId
+        && d().number == (exists(/databases/$(database)/documents/counters/reports) ? get(/databases/$(database)/documents/counters/reports).data.next : 1)
+        && getAfter(/databases/$(database)/documents/counters/reports).data.next == d().number + 1
+        && getAfter(/databases/$(database)/documents/reports/$(rid)/events/$(d().lastEventId)).data.status == 'submitted';
+
+      allow update: if staffUpdate() || residentUpdate();
+      allow delete: if isAdmin();
+
+      function eventAfter() { return getAfter(/databases/$(database)/documents/reports/$(rid)/events/$(request.resource.data.lastEventId)).data; }
+      function wroteEvent() {
+        return request.resource.data.lastEventId != resource.data.lastEventId && eventAfter().status == request.resource.data.status;
+      }
+
+      function staffUpdate() {
+        return isStaff()
+          && onlyChanged(['status', 'assigneeId', 'assigneeName', 'scheduledAt', 'feedback', 'lastEventId', 'updatedAt'])
+          && d().updatedAt == request.time
+          && (d().status == resource.data.status || canMove(resource.data.status, d().status))
+          // Every status change or dispatch leaves a timeline entry.
+          && (!changed().hasAny(['status', 'assigneeId', 'scheduledAt']) || wroteEvent())
+          && (!changed().hasAny(['assigneeId']) || (isOpen(resource.data.status) && exists(/databases/$(database)/documents/technicians/$(d().assigneeId))))
+          // Staff may only clear feedback (a new resolution needs a new confirmation).
+          && (!changed().hasAny(['feedback']) || d().feedback == null);
+      }
+
+      function residentUpdate() {
+        return isMember(resource.data.unitId) && d().updatedAt == request.time && d().residentActivity.at == request.time && (
+          // Reply / extra photos on an open report.
+          (onlyChanged(['updatedAt', 'residentActivity']) && isOpen(resource.data.status) && d().residentActivity.kind == 'reply')
+          // Confirm the fix with a 1–5 rating.
+          || (resource.data.status == 'resolved' && resource.data.feedback == null
+              && onlyChanged(['feedback', 'updatedAt', 'residentActivity']) && d().residentActivity.kind == 'feedback'
+              && d().feedback.keys().hasOnly(['rating', 'comment', 'at'])
+              && d().feedback.rating is int && d().feedback.rating >= 1 && d().feedback.rating <= 5
+              && optText(d().feedback.comment, 500) && d().feedback.at == request.time)
+          // Problem persists: back to "in progress", with a resident event.
+          || (resource.data.status == 'resolved' && resource.data.feedback == null && d().status == 'in_progress'
+              && onlyChanged(['status', 'lastEventId', 'updatedAt', 'residentActivity']) && d().residentActivity.kind == 'reopen'
+              && wroteEvent() && eventAfter().source == 'resident')
+        );
+      }
+
+      match /events/{eid} {
+        allow read: if isStaff() || isMember(get(reportPath(rid)).data.unitId);
+        allow create: if signedIn()
+          && request.resource.data.keys().hasOnly(['status', 'note', 'source', 'actorId', 'technicianName', 'scheduledAt', 'at'])
+          && request.resource.data.actorId == me() && request.resource.data.at == request.time
+          && optText(request.resource.data.note, 500)
+          // Events only exist together with the report change that references them.
+          && getAfter(reportPath(rid)).data.lastEventId == eid
+          && getAfter(reportPath(rid)).data.status == request.resource.data.status
+          && ((isStaff() && request.resource.data.source == 'agency')
+              || (request.resource.data.source == 'resident' && request.resource.data.status in ['submitted', 'in_progress']
+                  && request.resource.data.technicianName == null && isMember(getAfter(reportPath(rid)).data.unitId)));
+      }
+
+      match /messages/{mid} {
+        allow read: if isStaff() || isMember(get(reportPath(rid)).data.unitId);
+        allow create: if signedIn()
+          && request.resource.data.keys().hasOnly(['authorKind', 'authorId', 'authorName', 'body', 'isInfoRequest', 'at'])
+          && request.resource.data.authorId == me() && request.resource.data.at == request.time
+          && text(request.resource.data.authorName, 0, 120) && text(request.resource.data.body, 0, 1000)
+          && ((isStaff() && request.resource.data.authorKind == 'agency' && request.resource.data.isInfoRequest is bool)
+              || (request.resource.data.authorKind == 'resident' && request.resource.data.isInfoRequest == false
+                  && isMember(getAfter(reportPath(rid)).data.unitId) && isOpen(getAfter(reportPath(rid)).data.status)));
+      }
+
+      // Photos are compressed JPEG data URLs (no Cloud Storage needed on Spark).
+      match /photos/{pid} {
+        allow read: if isStaff() || isMember(get(reportPath(rid)).data.unitId);
+        allow create: if signedIn()
+          && request.resource.data.keys().hasOnly(['data', 'name', 'sizeBytes', 'messageId', 'addedKind', 'addedBy', 'at'])
+          && request.resource.data.addedBy == me() && request.resource.data.at == request.time
+          && request.resource.data.data is string && request.resource.data.data.size() < 900000
+          && request.resource.data.data.matches('data:image/(jpeg|png|webp);base64,.*')
+          && text(request.resource.data.name, 1, 200)
+          && ((isStaff() && request.resource.data.addedKind == 'agency')
+              || (request.resource.data.addedKind == 'resident' && isMember(get(reportPath(rid)).data.unitId)
+                  && isOpen(get(reportPath(rid)).data.status)));
+      }
+    }
+
+    // ------------------------------------------------------------ communication
+    match /notifications/{nid} {
+      allow read: if signedIn() && resource.data.uid == me();
+      allow update: if signedIn() && resource.data.uid == me() && onlyChanged(['read']) && request.resource.data.read == true;
+      // Staff notify residents; residents only get their own "submitted" receipt.
+      allow create: if isStaff() || (signedIn() && request.resource.data.uid == me() && request.resource.data.type == 'report_submitted');
+    }
+
+    match /announcements/{aid} {
+      allow read: if isStaff() || inResidence(resource.data.residenceId);
+      allow write: if isStaff();
+    }
+
+    // ------------------------------------------------------------ acquisition
+    match /listings/{lid} {
+      allow read: if resource.data.published == true || isStaff();
+      allow write: if isStaff();
+    }
+
+    match /interestRequests/{iid} {
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['listingId', 'uid', 'name', 'phone', 'email', 'message', 'preferredContact', 'handled', 'at'])
+        && request.resource.data.uid == me() && request.resource.data.handled == false && request.resource.data.at == request.time
+        && text(request.resource.data.name, 2, 120) && text(request.resource.data.phone, 8, 30) && optText(request.resource.data.message, 800);
+      allow read, update, delete: if isStaff();
+    }
+  }
+}

@@ -190,7 +190,7 @@ await check('confirmation shows dev reference and initial status', async () => {
   await expectText('n’a pas été transmis à l’agence')
   await shot('08-confirmation')
   await page.getByRole('link', { name: 'Voir mon signalement' }).click()
-  await page.waitForURL(/\/signalements\/rep-/)
+  await page.waitForURL(/\/signalements\/[0-9a-f-]{36}$/)
 })
 
 await check('report detail shows timeline and photo', async () => {

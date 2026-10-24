@@ -42,6 +42,10 @@ jobs:
           npm test
 
       - name: Build web app
+        # Connected to the agency's Firebase project by default; set the repo
+        # variable VITE_DATA_SOURCE=mock to build the demo-data version.
+        env:
+          VITE_DATA_SOURCE: ${{ vars.VITE_DATA_SOURCE || 'firebase' }}
         run: npm run build
 
       - name: Sync web build into the Android project
@@ -75,8 +79,14 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
+          CONNECTED: ${{ vars.VITE_DATA_SOURCE != 'mock' }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
+          if [ "$CONNECTED" = "true" ]; then
+            MODE="Connectée au serveur de l’agence : comptes résidents réels (code logement fourni par l’agence)."
+          else
+            MODE="Mode démonstration : données fictives stockées sur l’appareil, aucune donnée transmise à l’agence."
+          fi
           # Recreate the rolling release so it always points at this commit.
           gh release delete apk-latest --cleanup-tag --yes || true
           gh release create apk-latest out/IMMO-Agency.apk \
@@ -87,7 +97,7 @@ jobs:
 
           **Installer sur Android :** ouvrez ce lien depuis le téléphone, téléchargez **IMMO-Agency.apk**, puis autorisez l'installation d'applications inconnues si Android le demande.
 
-          Prototype : données fictives stockées sur l'appareil, aucune donnée transmise à l'agence."
+          ${MODE}"
 
       - name: Attach APK to versioned release
         if: startsWith(github.ref, 'refs/tags/v')

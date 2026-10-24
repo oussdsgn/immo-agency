@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "IMMO Agency — application résident de gestion immobilière (prototype frontend).",
+  "description": "IMMO Agency — application résident et espace agence de gestion immobilière (Firebase).",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -13,7 +13,11 @@
     "test": "vitest run",
     "e2e": "node scripts/e2e-smoke.mjs",
     "android:sync": "npm run build && cap sync android",
-    "android:apk": "npm run android:sync && cd android && ./gradlew :app:assembleDebug"
+    "android:apk": "npm run android:sync && cd android && ./gradlew :app:assembleDebug",
+    "dev:dashboard": "vite --config vite.dashboard.config.ts",
+    "build:dashboard": "tsc -b && vite build --config vite.dashboard.config.ts",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-immo-agency \"vitest run --config vitest.rules.config.ts\"",
+    "emulators": "firebase emulators:start --only auth,firestore --project demo-immo-agency"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
@@ -22,6 +26,7 @@
     "@capacitor/status-bar": "^8.0.4",
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
     "@fontsource/ibm-plex-sans-arabic": "^5.3.0",
+    "firebase": "^13.1.0",
     "lucide-react": "^1.61.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
@@ -31,6 +36,7 @@
     "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.5.3",
     "@eslint/js": "^10.0.1",
+    "@firebase/rules-unit-testing": "^6.0.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
@@ -39,6 +45,7 @@
     "eslint": "^10.13.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.7",
+    "firebase-tools": "^15.34.1",
     "globals": "^17.13.0",
     "playwright-core": "^1.63.0",
     "tailwindcss": "^4.3.3",

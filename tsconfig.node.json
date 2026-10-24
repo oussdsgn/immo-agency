@@ -14,5 +14,5 @@
     "moduleDetection": "force",
     "resolveJsonModule": true
   },
-  "include": ["vite.config.ts"]
+  "include": ["vite.config.ts", "vite.dashboard.config.ts"]
 }

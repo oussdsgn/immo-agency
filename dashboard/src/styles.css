@@ -1,0 +1,8 @@
+@import '../../src/styles/index.css';
+
+/* The dashboard reuses components from the resident app's src/. */
+@source '../../src';
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}

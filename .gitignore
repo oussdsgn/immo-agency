@@ -6,3 +6,7 @@ dist
 !.env.example
 test-results
 .DS_Store
+dist-dashboard
+firebase-debug.log
+firestore-debug.log
+ui-debug.log

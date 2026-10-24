@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card'
 import { AsyncBoundary, Skeleton } from '@/components/ui/States'
 import { useI18n } from '@/i18n'
 import { useAsync } from '@/lib/useAsync'
-import { services } from '@/services'
+import { IS_MOCK_DATA, services } from '@/services'
 
 export function ConfirmationPage() {
   const { id = '' } = useParams()
@@ -27,7 +27,7 @@ export function ConfirmationPage() {
 
           <Card className="mt-6 w-full divide-y divide-line text-start">
             <div className="flex items-center justify-between gap-3 p-4">
-              <span className="text-sm text-muted">{t('confirmation.reference')}</span>
+              <span className="text-sm text-muted">{IS_MOCK_DATA ? t('confirmation.reference') : t('common.reference')}</span>
               <span dir="ltr" className="font-mono text-sm font-bold text-ink">
                 #{report.reference}
               </span>
@@ -42,10 +42,12 @@ export function ConfirmationPage() {
             </div>
           </Card>
 
-          <p className="mt-4 flex items-start gap-2 rounded-control bg-dev-soft p-3 text-start text-xs font-medium text-dev">
-            <FlaskConical className="mt-px size-4 shrink-0" aria-hidden />
-            {t('confirmation.prototypeNotice')}
-          </p>
+          {IS_MOCK_DATA && (
+            <p className="mt-4 flex items-start gap-2 rounded-control bg-dev-soft p-3 text-start text-xs font-medium text-dev">
+              <FlaskConical className="mt-px size-4 shrink-0" aria-hidden />
+              {t('confirmation.prototypeNotice')}
+            </p>
+          )}
 
           <div className="mt-6 flex w-full flex-col gap-3">
             <ButtonLink to={`/signalements/${report.id}`} size="lg" block replace>
