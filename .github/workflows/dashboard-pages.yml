@@ -1,0 +1,52 @@
+# Publishes the agency dashboard to GitHub Pages:
+#   https://<owner>.github.io/<repo>/
+# One-time setup: Settings → Pages → Source: "GitHub Actions", and the repo
+# variables VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY (see docs/SUPABASE_SETUP.md).
+name: Dashboard (GitHub Pages)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build dashboard
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          DASHBOARD_BASE: /${{ github.event.repository.name }}/
+        run: |
+          npx vite build --config vite.dashboard.config.ts
+          # Single-page app: serve index.html for deep links too.
+          cp dist-dashboard/index.html dist-dashboard/404.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist-dashboard
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

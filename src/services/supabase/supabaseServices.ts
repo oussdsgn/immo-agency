@@ -193,6 +193,17 @@ function toListing(l: Row<'listings'>): Listing {
   }
 }
 
+/**
+ * Where e-mail links (confirmation, password reset) should land. The Android
+ * app runs on https://localhost, which a phone browser cannot open, so it falls
+ * back to the project's Site URL configured in Supabase.
+ */
+function webOrigin(): string | undefined {
+  if (typeof window === 'undefined') return undefined
+  const o = window.location.origin
+  return /^https?:\/\/localhost$/.test(o) && 'Capacitor' in window ? undefined : o
+}
+
 async function dataUrlToBlob(url: string): Promise<Blob> {
   const res = await fetch(url)
   return res.blob()
@@ -300,7 +311,7 @@ export function createSupabaseServices(url: string, key: string): Services {
           email: input.email.trim(),
           password: input.password,
           options: {
-            emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+            emailRedirectTo: webOrigin(),
             data: {
               full_name: input.fullName.trim(),
               phone: input.phone?.trim() || undefined,
@@ -317,7 +328,7 @@ export function createSupabaseServices(url: string, key: string): Services {
         return s ? { residentId: s.user.id, kind: 'account', startedAt: new Date().toISOString() } : null
       },
       sendPasswordReset: async (email) => {
-        const { error } = await db.auth.resetPasswordForEmail(email.trim(), { redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined })
+        const { error } = await db.auth.resetPasswordForEmail(email.trim(), { redirectTo: webOrigin() })
         if (error) throw toServiceError(error)
       },
       signOut: async () => {
