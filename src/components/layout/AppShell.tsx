@@ -1,4 +1,4 @@
-import { Bell, Building2, ClipboardList, FlaskConical, House, KeyRound, UserRound, type LucideIcon } from 'lucide-react'
+import { Bell, Building2, ClipboardList, FlaskConical, House, KeyRound, Siren, UserRound, type LucideIcon } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useUnreadCount } from '@/features/notifications/useUnreadCount'
@@ -60,6 +60,7 @@ export function AppShell() {
           <div className="my-3 h-px bg-line" />
           <SideLink item={{ to: '/notifications', label: 'nav.notifications', icon: Bell }} badge={unread} />
           <SideLink item={{ to: '/acquerir', label: 'nav.acquire', icon: KeyRound }} />
+          <SideLink item={{ to: '/urgences', label: 'nav.emergency', icon: Siren }} />
         </nav>
         <div className="mt-auto space-y-3 px-1">
           {IS_MOCK_DATA && (

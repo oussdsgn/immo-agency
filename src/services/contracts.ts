@@ -21,6 +21,7 @@ import type {
   ReportCategory,
   ReportStatus,
   Resident,
+  ResolutionFeedbackInput,
   Session,
 } from '@/types'
 
@@ -53,6 +54,12 @@ export interface ReportService {
     body: string,
     attachments: Pick<Attachment, 'id' | 'url' | 'name' | 'sizeBytes'>[],
   ): Promise<Report>
+  /**
+   * Resident confirms a resolved report is fixed (with a rating) or says the
+   * problem persists. In production the agency backend decides what happens to
+   * the status; the mock reopens the report as "in progress".
+   */
+  submitFeedback(reportId: string, feedback: ResolutionFeedbackInput): Promise<Report>
 }
 
 export interface NotificationService {

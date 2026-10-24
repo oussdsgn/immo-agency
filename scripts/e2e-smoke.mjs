@@ -49,7 +49,7 @@ async function noHorizontalOverflow() {
   }
 }
 const reportCount = () =>
-  page.evaluate(() => JSON.parse(localStorage.getItem('immo-agency.dev.db.v1') ?? '{"reports":[]}').reports.filter((r) => r.createdLocally).length)
+  page.evaluate(() => JSON.parse(localStorage.getItem('immo-agency.dev.db.v2') ?? '{"reports":[]}').reports.filter((r) => r.createdLocally).length)
 
 // Start from a clean slate.
 await page.goto(BASE)
@@ -58,9 +58,31 @@ await page.evaluate(() => {
   sessionStorage.clear()
 })
 
-await check('unauthenticated visit redirects to demo sign-in', async () => {
+await check('first launch shows onboarding (swipe-free: buttons, Arabic, skip-less finish)', async () => {
   await page.goto(BASE + '/')
+  await page.waitForURL(/\/bienvenue/)
+  await page.getByRole('heading', { name: 'Bienvenue sur IMMO Agency' }).waitFor()
+  await noHorizontalOverflow()
+  await shot('00a-onboarding-1')
+  await page.getByRole('button', { name: 'Suivant' }).click()
+  await page.getByRole('heading', { name: 'Signalez un problème en quelques étapes' }).waitFor()
+  await page.keyboard.press('ArrowRight')
+  await page.getByRole('heading', { name: 'Suivez chaque étape' }).waitFor()
+  await shot('00b-onboarding-3')
+  await page.getByRole('button', { name: /Passer en/ }).click()
+  await page.getByRole('heading', { name: 'تابع كل مرحلة' }).waitFor()
+  await noHorizontalOverflow()
+  await shot('00c-onboarding-ar')
+  await page.getByRole('button', { name: /التبديل إلى/ }).click()
+  await page.getByRole('button', { name: 'Aller à l’écran 4' }).click()
+  await page.getByRole('heading', { name: 'Restez informé·e' }).waitFor()
+  await page.getByRole('button', { name: 'Commencer' }).click()
+})
+
+await check('unauthenticated visit redirects to demo sign-in', async () => {
   await page.waitForURL(/\/connexion/)
+  await page.goto(BASE + '/')
+  await page.waitForURL(/\/connexion/) // onboarding is not shown twice
   await shot('00-signin')
   await page.getByRole('button', { name: 'Continuer avec le compte de démonstration' }).click()
   await page.waitForURL(BASE + '/')
@@ -193,6 +215,59 @@ await check('resident replies to the info request', async () => {
   await page.locator('ol li', { hasText: 'Le robinet se trouve à gauche' }).first().waitFor()
 })
 
+await check('resident says the fix did not work → report reopened', async () => {
+  await page.getByRole('button', { name: 'Passer à « En cours de traitement »' }).click()
+  await page.getByRole('button', { name: 'Passer à « Résolu »' }).click()
+  await page.getByRole('heading', { name: 'Le problème est-il réglé\u00a0?' }).waitFor()
+  await shot('09b-feedback-question')
+  await page.getByRole('button', { name: 'Non, le problème persiste' }).click()
+  await page.getByRole('button', { name: 'Relancer le signalement' }).click()
+  await expectText('5 caractères minimum')
+  await page.getByLabel('Qu’est-ce qui ne va toujours pas\u00a0?').fill('Le robinet goutte encore la nuit.')
+  await page.getByRole('button', { name: 'Relancer le signalement' }).click()
+  await expectText('Signalement relancé')
+  await page.getByText('Le résident signale que le problème persiste').waitFor()
+  await page.getByText('En cours de traitement').first().waitFor()
+})
+
+await check('resident confirms a resolved report and rates it', async () => {
+  await page.goto(BASE + '/')
+  await page.getByText('Confirmez la résolution').waitFor()
+  await page.getByRole('link', { name: /Ascenseur bloqué au 3e étage/ }).first().click()
+  await page.getByRole('button', { name: 'Oui, c’est réglé' }).click()
+  await page.getByRole('button', { name: 'Envoyer mon avis' }).click()
+  await expectText('Choisissez une note.')
+  await page.getByRole('radio', { name: /4 sur 5/ }).check({ force: true })
+  await page.getByLabel(/Commentaire/).fill('Intervention rapide, merci.')
+  await shot('09c-feedback-rating')
+  await page.getByRole('button', { name: 'Envoyer mon avis' }).click()
+  await page.getByText('Merci pour votre retour').waitFor()
+  await expectText('4 sur 5 — Satisfait')
+  await page.reload()
+  await page.getByText('Merci pour votre retour').waitFor()
+})
+
+await check('emergency page: national numbers, residence lines, tips → prefilled report', async () => {
+  await page.goto(BASE + '/')
+  await page.getByRole('link', { name: 'Urgences' }).first().click()
+  await page.waitForURL(/\/urgences/)
+  const href = await page.getByRole('link', { name: /Protection civile/ }).getAttribute('href')
+  if (href !== 'tel:14') throw new Error(`unexpected tel link ${href}`)
+  await expectText('Astreinte de l’agence')
+  await page.getByText('Odeur de gaz').click()
+  await expectText('N’actionnez aucun interrupteur')
+  await noHorizontalOverflow()
+  await shot('09d-emergency')
+  await page.getByText('Fuite d’eau importante').click()
+  await page.getByRole('link', { name: 'Signaler à l’agence' }).nth(1).click()
+  await page.waitForURL(/categorie=water_leak/)
+  await page.getByText('Résidence El Bahia').first().click()
+  await page.getByRole('button', { name: 'Suivant' }).click()
+  if (!(await page.getByRole('radio', { name: /Fuite d’eau/ }).isChecked())) throw new Error('category not prefilled')
+  await page.getByRole('button', { name: 'Annuler' }).first().click()
+  await page.getByRole('button', { name: 'Abandonner' }).click()
+})
+
 await check('notifications list the new events', async () => {
   await page.goto(BASE + '/notifications')
   await expectText('L’agence demande des informations')
@@ -282,7 +357,7 @@ await check('preferences persist across refresh', async () => {
   await sw.waitFor()
   if ((await sw.getAttribute('aria-checked')) !== 'false') throw new Error('unexpected default')
   await sw.click()
-  await page.waitForFunction(() => JSON.parse(localStorage.getItem('immo-agency.dev.db.v1')).preferences.listings === true)
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('immo-agency.dev.db.v2')).preferences.listings === true)
   await page.reload()
   await page.getByRole('switch', { name: /Nouveaux biens disponibles/, checked: true }).waitFor()
 })
@@ -329,7 +404,7 @@ await check('cancel flow asks for confirmation', async () => {
 
 await check('small screen (320px) layouts do not overflow', async () => {
   await page.setViewportSize({ width: 320, height: 640 })
-  for (const path of ['/', '/biens', '/biens/prop-bahia-a12', '/signalements', '/signalements/rep-0139', '/signaler', '/acquerir', '/profil', '/notifications']) {
+  for (const path of ['/', '/biens', '/biens/prop-bahia-a12', '/signalements', '/signalements/rep-0139', '/signaler', '/acquerir', '/profil', '/notifications', '/urgences', '/bienvenue']) {
     await page.goto(BASE + path)
     await page.waitForLoadState('networkidle')
     await page.waitForTimeout(700)

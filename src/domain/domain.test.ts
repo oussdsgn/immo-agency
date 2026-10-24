@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { EMPTY_DRAFT, hasErrors, isValidEmail, isValidPhone, validateDetailsStep, validateDraft } from './reportValidation'
-import { AGENCY_TRANSITIONS, canResidentReply, matchesStatusFilter } from './reportWorkflow'
+import { EMPTY_DRAFT, hasErrors, isValidEmail, isValidPhone, validateDetailsStep, validateDraft, validateFeedback } from './reportValidation'
+import { AGENCY_TRANSITIONS, canResidentReply, matchesStatusFilter, needsFeedback } from './reportWorkflow'
 
 describe('report validation', () => {
   it('flags every required field on an empty draft', () => {
@@ -56,5 +56,20 @@ describe('report workflow', () => {
     expect(matchesStatusFilter('resolved', 'open')).toBe(false)
     expect(matchesStatusFilter('resolved', 'done')).toBe(true)
     expect(matchesStatusFilter('awaiting_resident', 'awaiting_resident')).toBe(true)
+  })
+})
+
+describe('resolution feedback', () => {
+  it('is only requested for resolved reports without an answer', () => {
+    expect(needsFeedback({ status: 'resolved' })).toBe(true)
+    expect(needsFeedback({ status: 'resolved', feedback: { fixed: true, rating: 4, at: '' } })).toBe(false)
+    expect(needsFeedback({ status: 'in_progress' })).toBe(false)
+  })
+
+  it('requires a rating when fixed and an explanation when not', () => {
+    expect(validateFeedback({ fixed: true })).toEqual({ rating: 'validation.ratingRequired' })
+    expect(hasErrors(validateFeedback({ fixed: true, rating: 5 }))).toBe(false)
+    expect(validateFeedback({ fixed: false, comment: ' non ' })).toEqual({ comment: 'validation.stillBrokenRequired' })
+    expect(hasErrors(validateFeedback({ fixed: false, comment: 'Toujours une fuite' }))).toBe(false)
   })
 })

@@ -1,10 +1,10 @@
-import { ArrowRight, Building2, CircleAlert, ClipboardCheck, KeyRound, Megaphone, Plus } from 'lucide-react'
+import { ArrowRight, Building2, CircleAlert, CircleCheck, ClipboardCheck, KeyRound, Megaphone, Plus, Siren } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Badge } from '@/components/ui/Badge'
 import { Card, CardLink } from '@/components/ui/Card'
 import { SectionHeading } from '@/components/ui/PageHeader'
 import { AsyncBoundary, EmptyState, Skeleton } from '@/components/ui/States'
-import { isOpen } from '@/domain/reportWorkflow'
+import { isOpen, needsFeedback } from '@/domain/reportWorkflow'
 import { PropertyRow } from '@/features/properties/PropertyCard'
 import { unitLine } from '@/features/properties/format'
 import { ReportCard } from '@/features/reports/ReportCard'
@@ -32,21 +32,31 @@ export function HomePage() {
       {({ resident, properties, reports, announcements }) => {
         const active = reports.filter((r) => isOpen(r.status))
         const awaiting = active.filter((r) => r.status === 'awaiting_resident')
+        const toConfirm = reports.filter(needsFeedback)
         const latest = active[0] ?? reports[0]
         const byId = new Map(properties.map((p) => [p.id, p]))
         const primary = properties[0]
 
         return (
           <div className="animate-fade-up space-y-7">
-            <section aria-labelledby="greeting">
-              <h1 id="greeting" className="text-2xl font-bold tracking-tight text-ink sm:text-[1.75rem]">
-                {t('home.greeting', { name: resident.firstName })}
-              </h1>
-              {primary && (
-                <p className="mt-1 text-sm text-muted">
-                  <bdi>{primary.residenceName}</bdi> · {unitLine(t, primary)}
-                </p>
-              )}
+            <section aria-labelledby="greeting" className="flex items-start gap-3">
+              <div className="min-w-0 flex-1">
+                <h1 id="greeting" className="text-2xl font-bold tracking-tight text-ink sm:text-[1.75rem]">
+                  {t('home.greeting', { name: resident.firstName })}
+                </h1>
+                {primary && (
+                  <p className="mt-1 text-sm text-muted">
+                    <bdi>{primary.residenceName}</bdi> · {unitLine(t, primary)}
+                  </p>
+                )}
+              </div>
+              <Link
+                to="/urgences"
+                className="mt-0.5 inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-danger-ink/25 bg-danger-soft px-3.5 text-sm font-bold text-danger-ink hover:border-danger-ink/50"
+              >
+                <Siren className="size-4" aria-hidden />
+                {t('nav.emergency')}
+              </Link>
             </section>
 
             {properties.length > 0 ? (
@@ -80,6 +90,23 @@ export function HomePage() {
                   <span className="block text-sm font-bold">{t('home.actionNeeded')}</span>
                   <span className="mt-0.5 block text-sm">
                     {t('reportDetail.infoRequestTitle')} — <bdi>{r.title}</bdi>
+                  </span>
+                </span>
+                <ArrowRight className="mt-0.5 size-4.5 shrink-0 flip-rtl" aria-hidden />
+              </Link>
+            ))}
+
+            {toConfirm.map((r) => (
+              <Link
+                key={r.id}
+                to={`/signalements/${r.id}`}
+                className="flex items-start gap-3 rounded-card border border-success-ink/20 bg-success-soft p-4 text-success-ink transition-colors hover:border-success-ink/40"
+              >
+                <CircleCheck className="mt-0.5 size-5 shrink-0" aria-hidden />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-bold">{t('feedback.homeTitle')}</span>
+                  <span className="mt-0.5 block text-sm">
+                    <bdi>{r.title}</bdi> — {t('feedback.question')}
                   </span>
                 </span>
                 <ArrowRight className="mt-0.5 size-4.5 shrink-0 flip-rtl" aria-hidden />

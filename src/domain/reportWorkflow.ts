@@ -32,6 +32,11 @@ export function isOpen(status: ReportStatus): boolean {
   return OPEN.includes(status)
 }
 
+/** A resolved report waits for the resident to confirm the fix (or reopen it). */
+export function needsFeedback(report: Pick<Report, 'status' | 'feedback'>): boolean {
+  return report.status === 'resolved' && !report.feedback
+}
+
 /** Resident can add messages/photos while the report is still being handled. */
 export function canResidentReply(report: Pick<Report, 'status'>): boolean {
   return isOpen(report.status)
