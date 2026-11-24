@@ -68,7 +68,7 @@ export function Shell() {
               end={n.end}
               className={({ isActive }) =>
                 cn(
-                  'flex min-h-10 shrink-0 items-center gap-3 rounded-control px-3 text-sm font-semibold whitespace-nowrap transition-colors',
+                  'flex min-h-10 shrink-0 items-center gap-3 rounded-control px-3 text-sm font-semibold whitespace-nowrap transition-colors lg:py-2 lg:leading-snug lg:whitespace-normal',
                   isActive ? 'bg-brand-soft text-brand-ink' : 'text-ink-soft hover:bg-sunken',
                 )
               }
