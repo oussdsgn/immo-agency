@@ -1,6 +1,6 @@
 import { LogIn, UserPlus } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth'
+import { createUserWithEmailAndPassword, sendPasswordResetEmail, signInWithEmailAndPassword, updateProfile } from 'firebase/auth'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Logo } from '@/components/layout/Logo'
 import { Button } from '@/components/ui/Button'
@@ -58,6 +58,21 @@ export function LoginPage() {
     setBusy(false)
   }
 
+  async function resetPassword() {
+    if (busy) return
+    if (!isValidEmail(v.email)) return setAlert({ tone: 'error', text: 'Saisissez d’abord votre adresse e-mail, puis cliquez sur « Mot de passe oublié ».' })
+    setBusy(true)
+    setAlert(null)
+    try {
+      await sendPasswordResetEmail(auth, v.email.trim())
+      setAlert({ tone: 'info', text: `Si un compte existe pour ${v.email.trim()}, un e-mail de réinitialisation vient d’être envoyé (pensez aux spams).` })
+    } catch (err) {
+      const code = (err as { code?: string }).code ?? ''
+      setAlert({ tone: 'error', text: code === 'auth/too-many-requests' ? 'Trop de tentatives. Réessayez dans quelques minutes.' : errorMessage(err) })
+    }
+    setBusy(false)
+  }
+
   return (
     <div className="grid min-h-dvh place-items-center bg-canvas p-4">
       <div className="w-full max-w-sm">
@@ -78,6 +93,13 @@ export function LoginPage() {
               onChange={(e) => setV({ ...v, password: e.target.value })}
               autoComplete={mode === 'signIn' ? 'current-password' : 'new-password'}
             />
+            {mode === 'signIn' && (
+              <div className="-mt-2 text-end">
+                <button type="button" onClick={() => void resetPassword()} className="text-sm font-semibold text-brand-ink hover:underline">
+                  Mot de passe oublié ?
+                </button>
+              </div>
+            )}
             {alert && <InlineAlert tone={alert.tone}>{alert.text}</InlineAlert>}
             <Button type="submit" block size="lg" loading={busy} icon={!busy && (mode === 'signIn' ? <LogIn className="size-5" aria-hidden /> : <UserPlus className="size-5" aria-hidden />)}>
               {mode === 'signIn' ? 'Se connecter' : 'Créer le compte'}

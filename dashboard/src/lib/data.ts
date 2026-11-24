@@ -141,8 +141,8 @@ export async function dispatch(reportId: string, technicianId: string, scheduled
   emitChange('reports')
 }
 
-export async function sendMessage(reportId: string, body: string) {
-  await ops.sendAgencyMessage(db, await staffActor(), reportId, body)
+export async function sendMessage(reportId: string, body: string, photos: ops.PhotoInput[] = []) {
+  await ops.sendAgencyMessage(db, await staffActor(), reportId, body, photos)
   emitChange('reports')
 }
 

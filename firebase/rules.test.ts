@@ -318,7 +318,10 @@ describe('agency workflow', () => {
   it('nobody can post on a closed report except the agency', async () => {
     await assertSucceeds(ops.setReportStatus(as(agent.uid), agent, 'r1', 'closed'))
     await assertFails(ops.addResidentMessage(as(amine.uid), { uid: amine.uid, name: amine.fullName }, 'r1', 'Encore moi'))
-    await assertSucceeds(ops.sendAgencyMessage(as(agent.uid), agent, 'r1', 'Dossier clôturé, merci.'))
+    await assertSucceeds(ops.sendAgencyMessage(as(agent.uid), agent, 'r1', 'Dossier clôturé, merci.', [{ ...PHOTO, id: 'p-agency-done' }]))
+    const photo = await getDoc(doc(as(amine.uid), 'reports', 'r1', 'photos', 'p-agency-done'))
+    expect(photo.data()?.addedKind).toBe('agency')
+    expect(photo.data()?.messageId).toBeTruthy()
   })
 
   it('only an admin can delete a report', async () => {

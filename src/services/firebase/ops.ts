@@ -354,14 +354,17 @@ export async function dispatchReport(db: Firestore, staff: Actor, reportId: stri
   await batch.commit()
 }
 
-export async function sendAgencyMessage(db: Firestore, staff: Actor, reportId: string, body: string) {
+/** Message from the agency, optionally with photos (e.g. of the finished repair). */
+export async function sendAgencyMessage(db: Firestore, staff: Actor, reportId: string, body: string, photos: PhotoInput[] = []) {
   const r = await loadReport(db, reportId)
+  const messageId = newId(db, 'reports', reportId, 'messages')
   const batch = writeBatch(db)
   const m: MessageDoc = { authorKind: 'agency', authorId: staff.uid, authorName: staff.name.slice(0, 120), body: body.trim(), isInfoRequest: false, at: serverTimestamp() }
-  batch.set(doc(collection(db, 'reports', reportId, 'messages')), m)
+  batch.set(doc(db, 'reports', reportId, 'messages', messageId), m)
   batch.update(doc(db, 'reports', reportId), { updatedAt: serverTimestamp() })
   await notifyUnit(db, batch, r.unitId, reportId, 'agency_message', null)
   await batch.commit()
+  await addPhotos(db, reportId, photos, { uid: staff.uid, kind: 'agency' }, messageId)
 }
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
