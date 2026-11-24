@@ -351,7 +351,9 @@ describe('announcements and notifications', () => {
   it('a resident marks their own notification read, nothing else', async () => {
     const [n] = await notificationsOf(amine.uid)
     await assertSucceeds(updateDoc(doc(as(amine.uid), 'notifications', n.id), { read: true }))
-    await assertFails(updateDoc(doc(as(amine.uid), 'notifications', n.id), { type: 'announcement' }))
+    // A field that really changes (a no-op write is allowed and harmless).
+    await assertFails(updateDoc(doc(as(amine.uid), 'notifications', n.id), { type: n.type === 'announcement' ? 'report_resolved' : 'announcement' }))
+    await assertFails(updateDoc(doc(as(amine.uid), 'notifications', n.id), { uid: nora.uid }))
     await assertFails(updateDoc(doc(as(nora.uid), 'notifications', n.id), { read: true }))
     await assertFails(getDocs(collection(as(amine.uid), 'notifications')))
   })
