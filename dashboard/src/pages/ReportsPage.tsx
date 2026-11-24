@@ -1,6 +1,9 @@
-import { Search, SearchX } from 'lucide-react'
+import { Download, Search, SearchX } from 'lucide-react'
+import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
+import { useToast } from '@/components/ui/Toast'
 import { SelectField, controlClass } from '@/components/ui/Field'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { AsyncBoundary, EmptyState } from '@/components/ui/States'
@@ -9,6 +12,8 @@ import { useI18n } from '@/i18n'
 import { cn } from '@/lib/cn'
 import { useAsync } from '@/lib/useAsync'
 import { isOpenStatus, listReports, unitLabel, type ReportListItem } from '@dash/lib/data'
+import { download, reportsCsv } from '@dash/lib/exportCsv'
+import { errorMessage } from '@dash/lib/firebase'
 import { ReportRow } from './OverviewPage'
 
 export function ReportsPage() {
@@ -91,9 +96,12 @@ export function ReportsPage() {
                   ))}
                 </SelectField>
               </Card>
-              <p className="text-sm text-muted" aria-live="polite">
-                {visible.length} signalement{visible.length > 1 ? 's' : ''}
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm text-muted" aria-live="polite">
+                  {visible.length} signalement{visible.length > 1 ? 's' : ''}
+                </p>
+                <ExportButton reports={visible} />
+              </div>
               <Card className="overflow-hidden">
                 {visible.length === 0 ? (
                   <EmptyState icon={<SearchX />} title="Aucun signalement" body="Aucun résultat pour ces filtres." />
@@ -117,4 +125,33 @@ export function ReportsPage() {
 
 function matches(r: ReportListItem, needle: string) {
   return [r.reference, r.title, r.resident?.full_name, r.resident?.email, unitLabel(r)].some((v) => v?.toLowerCase().includes(needle))
+}
+
+/** Downloads the filtered list as a spreadsheet (CSV). */
+function ExportButton({ reports }: { reports: ReportListItem[] }) {
+  const { t } = useI18n()
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+  return (
+    <Button
+      size="sm"
+      variant="secondary"
+      loading={busy}
+      disabled={reports.length === 0}
+      icon={<Download className="size-4" aria-hidden />}
+      onClick={async () => {
+        setBusy(true)
+        try {
+          const csv = await reportsCsv(reports, (k) => t(k as Parameters<typeof t>[0]))
+          download(`signalements-${new Date().toISOString().slice(0, 10)}.csv`, csv)
+          toast(`${reports.length} signalement${reports.length > 1 ? 's' : ''} exporté${reports.length > 1 ? 's' : ''}`)
+        } catch (err) {
+          toast(errorMessage(err), 'error')
+        }
+        setBusy(false)
+      }}
+    >
+      Exporter (Excel / CSV)
+    </Button>
+  )
 }

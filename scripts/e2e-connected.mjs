@@ -7,7 +7,7 @@
  *   VITE_FIREBASE_EMULATOR=127.0.0.1 npm run dev:dashboard -- --port 5180
  *   node scripts/e2e-connected.mjs
  */
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { chromium } from 'playwright-core'
 
@@ -186,6 +186,20 @@ await check('agency resolves → resident confirms and rates → agency sees the
   await agency.getByText('Avis du résident : 5 / 5').waitFor(LIVE)
 })
 
+await check('agency sends a photo of the repair → resident sees it', async () => {
+  await agency.getByLabel('Répondre au résident').fill('Voici la réparation terminée.')
+  const png = await agency.screenshot({ clip: { x: 0, y: 0, width: 200, height: 150 } })
+  await agency.getByTestId('photo-input').setInputFiles({ name: 'reparation.png', mimeType: 'image/png', buffer: png })
+  await agency.getByRole('img', { name: 'reparation.png' }).waitFor()
+  await agency.getByRole('button', { name: 'Envoyer', exact: true }).click()
+  await agency.getByText('Message et photos envoyés').waitFor()
+  await agency.getByRole('button', { name: 'reparation.png' }).first().waitFor(LIVE)
+  await resident.reload()
+  await resident.getByText('Voici la réparation terminée.').waitFor(LIVE)
+  await resident.getByRole('button', { name: 'reparation.png' }).first().waitFor()
+  await shot(resident, '06a-resident-agency-photo')
+})
+
 await check('resident got notifications for each agency step', async () => {
   await resident.goto(APP + '/notifications')
   for (const text of ['intervention planifiée', 'demande des informations', 'Résolu']) await resident.getByText(new RegExp(text)).first().waitFor()
@@ -212,6 +226,30 @@ await check('dashboard overview and dispatch board render', async () => {
   await agency.getByRole('link', { name: 'Interventions', exact: true }).click()
   await agency.getByText('Planning par technicien').waitFor()
   await shot(agency, '08-dispatch')
+})
+
+await check('agency exports the reports as CSV', async () => {
+  await agency.getByRole('link', { name: 'Signalements', exact: true }).click()
+  await agency.getByLabel('Statut').selectOption('all')
+  const [file] = await Promise.all([agency.waitForEvent('download'), agency.getByRole('button', { name: /Exporter/ }).click()])
+  const csv = readFileSync(await file.path(), 'utf8')
+  const [header, row] = csv.replace(/^\uFEFF/, '').trim().split('\r\n')
+  if (!header.startsWith('Référence;Reçu le;Résidence')) throw new Error(`bad header ${header}`)
+  if (!/^SR-\d{4}-0001;/.test(row) || !row.includes('Fuite au plafond de la cuisine') || !row.includes('Karim Belkacem')) throw new Error(`bad row ${row}`)
+  const cells = row.split(';')
+  if (cells[16] !== '5' || !/^\d+(,\d)?$/.test(cells[15]) || !cells[14]) throw new Error(`missing resolution data ${row}`)
+})
+
+await check('agency: forgotten password sends a reset e-mail', async () => {
+  const ctx = await browser.newContext({ locale: 'fr-FR' })
+  const p = await ctx.newPage()
+  await p.goto(DASH + '/connexion')
+  await p.getByRole('button', { name: 'Mot de passe oublié ?' }).click()
+  await p.getByText(/Saisissez d’abord votre adresse e-mail/).waitFor()
+  await p.getByLabel('E-mail professionnel').fill(`direction-${stamp}@example.com`)
+  await p.getByRole('button', { name: 'Mot de passe oublié ?' }).click()
+  await p.getByText(/un e-mail de réinitialisation vient d’être envoyé/).waitFor()
+  await ctx.close()
 })
 
 await browser.close()

@@ -129,6 +129,8 @@ L'interface ne dépend que de `services` (`src/services/index.ts`), qui expose l
 - **Alertes en direct** : nouveau signalement, réponse d'un résident, problème toujours présent, nouvel avis. Chacune s'affiche en notification sur l'écran avec un lien « Ouvrir » et un son (double bip si urgent, désactivable). Si le navigateur l'autorise, une notification apparaît aussi quand l'onglet est en arrière-plan.
 - **Signalements** : boîte de réception filtrable (statut, urgence, résidence, technicien, recherche).
   - La fiche montre les photos, les coordonnées du résident, l'historique et les échanges.
+  - L'agence peut joindre des photos à ses messages (par exemple la réparation terminée) : le résident les voit dans l'application.
+  - **Export Excel / CSV** de la liste filtrée : référence, résidence, catégorie, statut, technicien, résident, date de résolution, délai de résolution en heures et note du résident.
   - Les actions de statut sont limitées aux étapes que le workflow autorise.
 - **Interventions** : file « à planifier » et planning par technicien, avec les retards signalés. La planification (technicien, date et heure, note) notifie le résident ; le technicien et le rendez-vous apparaissent dans son application.
 - **Demandes d'informations** : la question passe le signalement en « Informations requises » et le résident est notifié.
@@ -137,6 +139,7 @@ L'interface ne dépend que de `services` (`src/services/index.ts`), qui expose l
   - On y voit les occupants rattachés, et on peut leur retirer l'accès.
 - **Techniciens**, **Annonces** (français et arabe, notifiées aux résidents de la résidence), **Demandes d'achat ou de location**.
 - **Équipe** (administrateurs) : validation des demandes d'accès et gestion des rôles.
+- **Mot de passe oublié** sur la page de connexion : Firebase envoie un lien de réinitialisation par e-mail.
 
 ## Backend et sécurité
 
@@ -148,7 +151,7 @@ L'interface ne dépend que de `services` (`src/services/index.ts`), qui expose l
 - **Identité vérifiée** : l'auteur des messages, des photos et des événements doit être l'utilisateur connecté, et les dates sont celles du serveur. La référence `SR-AAAA-NNNN` vient d'un compteur incrémenté dans la même transaction.
 - **Photos** : compressées dans l'app et stockées dans Firestore (moins de 900 Ko, images uniquement), lisibles par l'agence et les occupants du logement seulement. Pas besoin de Cloud Storage ni de l'offre payante.
 - **Comptes** : les comptes agence restent « en attente » jusqu'à validation par un administrateur. Le premier administrateur se désigne une seule fois.
-- **Tests** : `npm run test:rules` (47 vérifications, également exécutées en CI) et `scripts/e2e-connected.mjs` (14 étapes croisées application ⇄ tableau de bord sur les émulateurs).
+- **Tests** : `npm run test:rules` (47 vérifications, également exécutées en CI) et `scripts/e2e-connected.mjs` (17 étapes croisées application ⇄ tableau de bord sur les émulateurs).
 
 ### Sécurité
 

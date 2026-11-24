@@ -11,9 +11,11 @@ import { AsyncBoundary, Skeleton } from '@/components/ui/States'
 import { useToast } from '@/components/ui/Toast'
 import { AGENCY_TRANSITIONS } from '@/domain/reportWorkflow'
 import { PhotoGallery } from '@/features/reports/PhotoGallery'
+import { PhotoPicker } from '@/features/reports/PhotoPicker'
 import { Timeline } from '@/features/reports/Timeline'
 import { useI18n } from '@/i18n'
 import { cn } from '@/lib/cn'
+import type { PreparedPhoto } from '@/lib/images'
 import { useAsync } from '@/lib/useAsync'
 import type { Attachment, Report, ReportCategoryId, StatusEvent } from '@/types'
 import { dispatch, getReport, isOpenStatus, listTechnicians, requestInfo, sendMessage, setStatus, toLocalInput, unitLabel, type ReportDetail } from '@dash/lib/data'
@@ -340,19 +342,25 @@ function InfoRequestForm({ reportId }: { reportId: string }) {
 function MessageForm({ reportId }: { reportId: string }) {
   const { busy, error, run } = useAction()
   const [body, setBody] = useState('')
+  const [photos, setPhotos] = useState<PreparedPhoto[]>([])
+  const empty = !body.trim() && photos.length === 0
   return (
     <form
       className="space-y-3"
       onSubmit={async (e) => {
         e.preventDefault()
-        if (!body.trim()) return
-        if (await run('msg', () => sendMessage(reportId, body), 'Message envoyé')) setBody('')
+        if (empty) return
+        if (await run('msg', () => sendMessage(reportId, body, photos), photos.length ? 'Message et photos envoyés' : 'Message envoyé')) {
+          setBody('')
+          setPhotos([])
+        }
       }}
     >
       <TextArea label="Répondre au résident" value={body} onChange={(e) => setBody(e.target.value)} rows={3} className="min-h-20" maxLength={1000} />
+      <PhotoPicker photos={photos} onChange={setPhotos} max={5} label="Photos" hint="Par exemple la réparation terminée : le résident les voit dans l’application." />
       {error && <FieldError>{error}</FieldError>}
       <div className="flex justify-end">
-        <Button type="submit" loading={busy === 'msg'} disabled={!body.trim()} icon={<Send className="size-4" aria-hidden />}>
+        <Button type="submit" loading={busy === 'msg'} disabled={empty} icon={<Send className="size-4" aria-hidden />}>
           Envoyer
         </Button>
       </div>
